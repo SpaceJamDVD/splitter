@@ -1,2 +1,2 @@
 # splitter
-splitwise clone 
+splitwise clone using MERN stack

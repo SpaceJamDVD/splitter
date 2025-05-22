@@ -1,0 +1,27 @@
+# node modules (never commit these)
+node_modules/
+
+# dotenv config
+.env
+
+# logs
+logs
+*.log
+
+# OS cruft
+.DS_Store
+
+# IDE stuff
+.vscode/
+.idea/
+
+# debug stuff
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# coverage tools
+coverage/
+
+# compiled stuff
+dist/

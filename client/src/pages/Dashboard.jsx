@@ -5,6 +5,7 @@ import useIsMobile from "../hooks/useIsMobile";
 import { getMyGroups } from "../services/groupService"; // your API call
 import { useNavigate } from "react-router-dom";
 import GroupForm from "../components/GroupForm";
+import GroupCard from "../components/GroupCard";
 
 function Dashboard() {
     const { user } = useContext(AuthContext);
@@ -80,9 +81,7 @@ function Dashboard() {
           ) : (
             <ul>
               {groups.map((group) => (
-                <li key={group._id} style={styles.groupItem}>
-                  <strong>{group.name}</strong> — {group.description}
-                </li>
+                <GroupCard key={group._id} group={group} />
               ))}
             </ul>
           )}

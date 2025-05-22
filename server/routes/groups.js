@@ -40,4 +40,41 @@ router.get('/my', async (req, res) => {
     }
   });
 
+// Get group by ID
+router.get('/:id', async (req, res) => {
+    try {
+      const group = await Group.findById(req.params.id);
+      if (!group) return res.status(404).json({ error: 'Group not found' });
+      res.json(group);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch group' });
+}
+});
+
+// Join a group via invite token
+router.post('/join/:inviteToken', async (req, res) => {
+    const userId = req.user.userId; // from JWT
+  
+    try {
+      const group = await Group.findOne({ inviteToken: req.params.inviteToken });
+  
+      if (!group) {
+        return res.status(404).json({ error: 'Invalid or expired invite link' });
+      }
+  
+      if (group.members.includes(userId)) {
+        return res.status(400).json({ error: 'You are already a member of this group' });
+      }
+  
+      group.members.push(userId);
+      await group.save();
+  
+      res.json({ message: 'Successfully joined group', group });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to join group' });
+    }
+  });
+
 module.exports = router;

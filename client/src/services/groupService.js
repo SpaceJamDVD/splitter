@@ -13,3 +13,13 @@ export const getMyGroups = async () => {
     const response = await API.get('/groups/my');
     return response.data;
 }
+
+export const getGroupById = async (id) => {
+    const response = await API.get(`/groups/${id}`);
+    return response.data;
+  };
+
+export const joinGroupWithToken = async (inviteToken) => {
+    const response = await API.post(`/groups/join/${inviteToken}`);
+    return response.data;
+  };

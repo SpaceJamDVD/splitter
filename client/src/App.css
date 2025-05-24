@@ -1,14 +1,24 @@
+/* Global App Styles */
 .App {
   text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* Body with matching gradient background */
 body {
   margin: 0;
-  background-color: #4a4a5d;
-  color: #fff;
-  font-family: sans-serif;
+  background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+  color: #111827;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
 }
 
+/* Remove default margins and paddings */
+* {
+  box-sizing: border-box;
+}
+
+/* App logo styling */
 .App-logo {
   height: 40vmin;
   pointer-events: none;
@@ -20,17 +30,23 @@ body {
   }
 }
 
+/* Updated header to match app theme */
 .App-header {
-  background-color: #282c34;
+  background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   font-size: calc(10px + 2vmin);
-  color: white;
+  color: #111827;
+  border-radius: 16px;
+  margin: 20px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
+/* Navbar responsive styles */
 /* Desktop: always show sidebar */
 @media (min-width: 769px) {
   .navbar-toggle {
@@ -45,7 +61,7 @@ body {
   }
 
   .navbar-mobile {
-    left: -220px;
+    left: -280px; /* Updated to match new navbar width */
   }
 
   .navbar-mobile.open {
@@ -53,15 +69,202 @@ body {
   }
 }
 
+/* Updated link color to match theme */
 .App-link {
-  color: #61dafb;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
 }
 
+.App-link:hover {
+  color: #1d4ed8;
+}
+
+/* Button styles to match app theme */
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  color: #374151;
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+  color: #111827;
+}
+
+/* Card styles for consistency */
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  border: 1px solid #f3f4f6;
+  margin-bottom: 24px;
+}
+
+.card-header {
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  margin: -24px -24px 24px -24px;
+  padding: 20px 24px;
+  border-radius: 16px 16px 0 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* Input styles for consistency */
+.form-input {
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  outline: none;
+  background: white;
+  width: 100%;
+  font-family: inherit;
+}
+
+.form-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Text styles */
+.text-primary {
+  color: #2563eb;
+}
+
+.text-secondary {
+  color: #6b7280;
+}
+
+.text-success {
+  color: #16a34a;
+}
+
+.text-error {
+  color: #dc2626;
+}
+
+/* Utility classes */
+.gradient-text {
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.shadow-sm {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Animation keyframes */
 @keyframes App-logo-spin {
   from {
     transform: rotate(0deg);
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Fade in animation class */
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Loading spinner */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Responsive helpers */
+.mobile-only {
+  display: none;
+}
+
+.desktop-only {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: block;
+  }
+
+  .desktop-only {
+    display: none;
+  }
+
+  .card {
+    margin: 16px;
+    padding: 20px;
+  }
+
+  body {
+    font-size: 14px;
   }
 }

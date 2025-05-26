@@ -12,6 +12,8 @@ class GroupController {
     const { name, description } = req.body;
     const userId = req.user.userId;
 
+    console.log('Creating group with:', { name, description, userId });
+
     try {
       const group = new Group({
         name,
@@ -46,11 +48,7 @@ class GroupController {
         .populate('members', 'username')
         .exec();
 
-      if (!group) {
-        return res.status(404).json({ error: 'No group found' });
-      }
-
-      res.json(group);
+      res.json(group); // group will be null if not found
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Failed to fetch group' });

@@ -28,27 +28,25 @@ const GroupPage = () => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
+  const [showInviteButton, setShowInviteButton] = useState(false);
 
   useEffect(() => {
     const loadGroup = async () => {
       try {
         let data;
         if (id) {
-          // Direct group access via URL
           data = await getGroupById(id);
         } else {
-          // Dashboard access - get user's first group, then fetch it properly
-          const groups = await getUserGroup();
-          if (groups.length === 0) {
-            // No groups found - show create group flow
+          data = await getUserGroup(); // Returns group object or null
+          if (!data) {
             setShowCreateGroup(true);
             setLoading(false);
             return;
           }
-          // Get the first group's ID, then fetch it with populated members
-          data = await getUserGroup();
+          // data is already the full group with populated members
         }
         setGroup(data);
+        setShowInviteButton(data.members?.length < 2);
       } catch (err) {
         console.error(err);
         setError('Failed to load group');
@@ -83,6 +81,9 @@ const GroupPage = () => {
       minHeight: '100vh',
       fontFamily:
         '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start',
     },
     content: {
       padding: '40px',
@@ -347,10 +348,9 @@ const GroupPage = () => {
   if (showCreateGroup) {
     return (
       <div style={styles.container}>
-        <Navbar />
         <div style={styles.content}>
           <div style={{ textAlign: 'center', padding: '40px' }}>
-            <h1>Welcome to Splitter!</h1>
+            <h1>Welcome to OurExpenses!</h1>
             <p>Let's create your first shared expense account.</p>
 
             <GroupForm onSuccess={handleGroupCreated} />
@@ -363,7 +363,6 @@ const GroupPage = () => {
   if (loading) {
     return (
       <div style={styles.container}>
-        <Navbar />
         <div style={styles.content}>
           <div style={styles.loadingContainer}>Loading...</div>
         </div>
@@ -374,7 +373,6 @@ const GroupPage = () => {
   if (error) {
     return (
       <div style={styles.container}>
-        <Navbar />
         <div style={styles.content}>
           <div style={styles.errorContainer}>{error}</div>
         </div>
@@ -386,7 +384,6 @@ const GroupPage = () => {
 
   return (
     <div style={styles.container}>
-      <Navbar />
       <div style={styles.content}>
         {/* Header Section */}
         <div style={styles.header}>
@@ -408,22 +405,24 @@ const GroupPage = () => {
                 {group.members?.length || 0})
               </button>
 
-              <button
-                onClick={() => setShowModal(true)}
-                style={{ ...styles.button, ...styles.inviteButton }}
-                onMouseEnter={(e) =>
-                  Object.assign(e.target.style, styles.buttonHover)
-                }
-                onMouseLeave={(e) =>
-                  Object.assign(e.target.style, {
-                    ...styles.button,
-                    ...styles.inviteButton,
-                  })
-                }
-              >
-                <UserPlus size={16} />
-                Invite Member
-              </button>
+              {showInviteButton && (
+                <button
+                  onClick={() => setShowModal(true)}
+                  style={{ ...styles.button, ...styles.inviteButton }}
+                  onMouseEnter={(e) =>
+                    Object.assign(e.target.style, styles.buttonHover)
+                  }
+                  onMouseLeave={(e) =>
+                    Object.assign(e.target.style, {
+                      ...styles.button,
+                      ...styles.inviteButton,
+                    })
+                  }
+                >
+                  <UserPlus size={16} />
+                  Invite Member
+                </button>
+              )}
 
               <button
                 onClick={() => setShowTransactionModal(true)}

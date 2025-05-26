@@ -10,7 +10,7 @@ export const createGroup = async ({ name, description }) => {
 };
 
 export const getUserGroup = async () => {
-  const response = await API.get('/groups/user-group'); // ← Use this instead
+  const response = await API.get('/groups/user-group');
   return response.data;
 };
 

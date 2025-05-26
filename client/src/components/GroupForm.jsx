@@ -87,9 +87,6 @@ const OnboardingGroupForm = ({ onSuccess }) => {
       minHeight: '100vh',
       fontFamily:
         '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
     },
     card: {
       background: 'white',
@@ -285,6 +282,12 @@ const OnboardingGroupForm = ({ onSuccess }) => {
       textDecoration: 'underline',
       marginTop: '16px',
     },
+    buttonContainer: {
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: '32px',
+    },
   };
 
   // Step 1: Welcome
@@ -308,23 +311,24 @@ const OnboardingGroupForm = ({ onSuccess }) => {
             <Heart size={40} color="#f59e0b" />
           </div>
 
-          <h1 style={styles.title}>Welcome to Splitter!</h1>
           <p style={styles.subtitle}>
             The easiest way for couples to track shared expenses. Let's set up
             your accounts!
           </p>
 
-          <button
-            onClick={() => setStep(2)}
-            style={styles.button}
-            onMouseEnter={(e) =>
-              Object.assign(e.target.style, styles.buttonHover)
-            }
-            onMouseLeave={(e) => Object.assign(e.target.style, styles.button)}
-          >
-            Let's Get Started
-            <ArrowRight size={20} />
-          </button>
+          <div style={{ ...styles.buttonContainer }}>
+            <button
+              onClick={() => setStep(2)}
+              style={styles.button}
+              onMouseEnter={(e) =>
+                Object.assign(e.target.style, styles.buttonHover)
+              }
+              onMouseLeave={(e) => Object.assign(e.target.style, styles.button)}
+            >
+              Let's Get Started
+              <ArrowRight size={20} />
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -351,7 +355,7 @@ const OnboardingGroupForm = ({ onSuccess }) => {
             <Users size={40} color="#f59e0b" />
           </div>
 
-          <h1 style={styles.title}>Name Your Shared Account</h1>
+          <h1 style={styles.title}>Name Your Group</h1>
           <p style={styles.subtitle}>
             What would you like to call your shared expense account? You can
             always change this later.
@@ -415,7 +419,7 @@ const OnboardingGroupForm = ({ onSuccess }) => {
               ) : (
                 <>
                   <Sparkles size={20} />
-                  Create Our Account
+                  Create Our Group
                 </>
               )}
             </button>
@@ -495,21 +499,19 @@ const OnboardingGroupForm = ({ onSuccess }) => {
             </button>
           </div>
 
-          <button
-            onClick={handleFinish}
-            style={styles.button}
-            onMouseEnter={(e) =>
-              Object.assign(e.target.style, styles.buttonHover)
-            }
-            onMouseLeave={(e) => Object.assign(e.target.style, styles.button)}
-          >
-            Start Tracking Expenses
-            <ArrowRight size={20} />
-          </button>
-
-          <button onClick={handleFinish} style={styles.skipButton}>
-            I'll invite them later
-          </button>
+          <div style={{ ...styles.buttonContainer }}>
+            <button
+              onClick={handleFinish}
+              style={styles.button}
+              onMouseEnter={(e) =>
+                Object.assign(e.target.style, styles.buttonHover)
+              }
+              onMouseLeave={(e) => Object.assign(e.target.style, styles.button)}
+            >
+              Start Tracking Expenses
+              <ArrowRight size={20} />
+            </button>
+          </div>
         </div>
 
         <style jsx>{`

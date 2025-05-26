@@ -3,7 +3,8 @@ import Navbar from '../components/Navbar';
 import TransactionForm from '../components/TransactionForm';
 import TransactionList from '../components/TransactionList';
 import { useParams } from 'react-router-dom';
-import { getGroupById } from '../services/groupService';
+import GroupForm from '../components/GroupForm';
+import { getGroupById, getUserGroup } from '../services/groupService';
 import {
   Users,
   Plus,
@@ -16,6 +17,8 @@ import {
 
 const GroupPage = () => {
   const { id } = useParams();
+  // If no ID from URL, get user's first group
+  const [shouldGetUserGroup, setShouldGetUserGroup] = useState(!id);
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -23,11 +26,28 @@ const GroupPage = () => {
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showGroupForm, setShowGroupForm] = useState(false);
 
   useEffect(() => {
     const loadGroup = async () => {
       try {
-        const data = await getGroupById(id);
+        let data;
+        if (id) {
+          // Direct group access via URL
+          data = await getGroupById(id);
+        } else {
+          // Dashboard access - get user's first group, then fetch it properly
+          const groups = await getUserGroup();
+          if (groups.length === 0) {
+            // No groups found - show create group flow
+            setShowCreateGroup(true);
+            setLoading(false);
+            return;
+          }
+          // Get the first group's ID, then fetch it with populated members
+          data = await getUserGroup();
+        }
         setGroup(data);
       } catch (err) {
         console.error(err);
@@ -50,6 +70,11 @@ const GroupPage = () => {
     } catch (err) {
       console.error('Failed to copy:', err);
     }
+  };
+
+  const handleGroupCreated = (newGroup) => {
+    setGroup(newGroup);
+    setShowCreateGroup(false);
   };
 
   const styles = {
@@ -316,6 +341,23 @@ const GroupPage = () => {
   `;
   if (!document.head.contains(styleElement)) {
     document.head.appendChild(styleElement);
+  }
+
+  // Show create group onboarding if no groups exist
+  if (showCreateGroup) {
+    return (
+      <div style={styles.container}>
+        <Navbar />
+        <div style={styles.content}>
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <h1>Welcome to Splitter!</h1>
+            <p>Let's create your first shared expense account.</p>
+
+            <GroupForm onSuccess={handleGroupCreated} />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {

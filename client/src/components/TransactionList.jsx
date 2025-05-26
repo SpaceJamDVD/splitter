@@ -33,9 +33,6 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
           getBalancesForGroup(groupId),
         ]);
 
-        console.log('Fetched transactions:', transactionsData);
-        console.log('Fetched balances:', balancesData);
-
         setTransactions(transactionsData);
         setMemberBalances(balancesData);
       } catch (err) {

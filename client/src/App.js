@@ -23,7 +23,7 @@ function App() {
             path="/dashboard"
             element={
               <Layout>
-                <Dashboard />
+                <GroupPage />
               </Layout>
             }
           />

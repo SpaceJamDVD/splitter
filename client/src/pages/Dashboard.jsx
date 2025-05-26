@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
-import { getMyGroups } from '../services/groupService';
+import { getUserGroup } from '../services/groupService';
 import { useNavigate } from 'react-router-dom';
 import GroupForm from '../components/GroupForm';
 import GroupCard from '../components/GroupCard';
@@ -16,7 +16,7 @@ function Dashboard() {
   useEffect(() => {
     const fetchGroups = async () => {
       try {
-        const result = await getMyGroups();
+        const result = await getUserGroup();
         setGroups(result);
       } catch (err) {
         console.error('Failed to fetch groups', err);
@@ -40,7 +40,7 @@ function Dashboard() {
     // Refresh groups after creating a new one
     const fetchGroups = async () => {
       try {
-        const result = await getMyGroups();
+        const result = await getUserGroup();
         setGroups(result);
       } catch (err) {
         console.error('Failed to fetch groups', err);

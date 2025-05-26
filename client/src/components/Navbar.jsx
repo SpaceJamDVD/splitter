@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
+import { logout } from '../api.js';
 import {
   FaHome,
   FaUsers,
@@ -212,6 +213,10 @@ const Navbar = () => {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+  };
+
   return (
     <>
       {isMobile && !isOpen && showHamburger && (
@@ -285,21 +290,26 @@ const Navbar = () => {
             </NavLink>
           </div>
 
-          <div style={styles.linkContainer}>
-            <NavLink
-              to="/logout"
-              style={getNavLinkStyle}
-              onClick={handleNavLinkClick}
-              onMouseEnter={(e) => handleLinkHover(e, true)}
-              onMouseLeave={(e) => handleLinkHover(e, false)}
-              className={({ isActive }) => (isActive ? 'active-link' : '')}
-            >
-              <div style={styles.iconWrapper}>
-                <FaSignOutAlt />
-              </div>
-              Logout
-            </NavLink>
-          </div>
+          <button
+            onClick={() => {
+              handleLogout(); // properly log out
+              handleNavLinkClick(); // close nav if mobile
+            }}
+            style={{
+              ...styles.link,
+              border: 'none',
+              background: 'transparent',
+              textAlign: 'left',
+              width: '100%',
+            }}
+            onMouseEnter={(e) => handleLinkHover(e, true)}
+            onMouseLeave={(e) => handleLinkHover(e, false)}
+          >
+            <div style={styles.iconWrapper}>
+              <FaSignOutAlt />
+            </div>
+            Logout
+          </button>
         </div>
 
         <div style={styles.footer}>

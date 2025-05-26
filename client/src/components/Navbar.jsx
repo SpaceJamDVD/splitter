@@ -204,12 +204,21 @@ const Navbar = () => {
   };
 
   const handleLinkHover = (e, isEntering) => {
-    if (!e.target.classList.contains('active-link')) {
-      if (isEntering) {
-        Object.assign(e.target.style, styles.linkHover);
-      } else {
-        Object.assign(e.target.style, styles.link);
-      }
+    const target = e.currentTarget;
+
+    if (target.classList.contains('active-link')) return;
+
+    if (isEntering) {
+      target.style.transform = 'translateX(4px)';
+      target.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+      target.style.background =
+        'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)';
+      target.style.color = '#374151';
+    } else {
+      target.style.transform = 'translateX(0)';
+      target.style.boxShadow = 'none';
+      target.style.background = 'transparent';
+      target.style.color = '#6b7280';
     }
   };
 

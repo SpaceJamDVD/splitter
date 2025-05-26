@@ -430,12 +430,14 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
           <button
             style={styles.settleButton}
             onClick={handleSettleUp}
-            onMouseEnter={(e) =>
-              Object.assign(e.target.style, styles.settleButtonHover)
-            }
-            onMouseLeave={(e) =>
-              Object.assign(e.target.style, styles.settleButton)
-            }
+            onMouseEnter={(e) => {
+              e.target.style.transform = 'scale(1.05)';
+              e.target.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = 'scale(1)';
+              e.target.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+            }}
           >
             Settle Up
           </button>

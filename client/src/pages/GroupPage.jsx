@@ -29,6 +29,7 @@ const GroupPage = () => {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [showInviteButton, setShowInviteButton] = useState(false);
+  const [canAddTransaction, setCanAddTransaction] = useState(false);
 
   useEffect(() => {
     const loadGroup = async () => {
@@ -46,6 +47,7 @@ const GroupPage = () => {
           // data is already the full group with populated members
         }
         setGroup(data);
+        setCanAddTransaction(data.members?.length >= 2);
         setShowInviteButton(data.members?.length < 2);
       } catch (err) {
         console.error(err);
@@ -88,6 +90,7 @@ const GroupPage = () => {
     content: {
       padding: '40px',
       maxWidth: '1200px',
+      minWidth: '1200px',
     },
     loadingContainer: {
       padding: '40px',
@@ -148,7 +151,6 @@ const GroupPage = () => {
       fontSize: '14px',
       transition: 'all 0.2s ease',
       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-      transform: 'translateY(0)', // Explicitly set default transform
     },
     inviteButton: {
       background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
@@ -179,7 +181,6 @@ const GroupPage = () => {
       transition: 'all 0.2s ease',
       height: 'fit-content',
       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-      transform: 'translateY(0)', // Explicitly set default transform
     },
     membersSection: {
       marginTop: '24px',
@@ -289,7 +290,6 @@ const GroupPage = () => {
       borderRadius: '8px',
       color: '#6b7280',
       transition: 'all 0.2s ease',
-      backgroundColor: 'transparent', // Explicitly set default
     },
     closeButtonHover: {
       backgroundColor: '#f3f4f6',
@@ -402,16 +402,6 @@ const GroupPage = () => {
                 style={{
                   ...styles.membersToggle,
                 }}
-                onMouseEnter={(e) => {
-                  e.target.style.transform = 'translateY(-2px)';
-                  e.target.style.boxShadow =
-                    '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.transform = 'translateY(0)';
-                  e.target.style.boxShadow =
-                    '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
-                }}
               >
                 <Users size={16} />
                 {showMembers ? 'Hide' : 'Show'} Members (
@@ -422,16 +412,15 @@ const GroupPage = () => {
                 <button
                   onClick={() => setShowModal(true)}
                   style={{ ...styles.button, ...styles.inviteButton }}
-                  onMouseEnter={(e) => {
-                    e.target.style.transform = 'translateY(-2px)';
-                    e.target.style.boxShadow =
-                      '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.transform = 'translateY(0)';
-                    e.target.style.boxShadow =
-                      '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
-                  }}
+                  onMouseEnter={(e) =>
+                    Object.assign(e.target.style, styles.buttonHover)
+                  }
+                  onMouseLeave={(e) =>
+                    Object.assign(e.target.style, {
+                      ...styles.button,
+                      ...styles.inviteButton,
+                    })
+                  }
                 >
                   <UserPlus size={16} />
                   Invite Member
@@ -439,17 +428,35 @@ const GroupPage = () => {
               )}
 
               <button
-                onClick={() => setShowTransactionModal(true)}
-                style={{ ...styles.button, ...styles.transactionButton }}
+                onClick={() => {
+                  if (canAddTransaction) setShowTransactionModal(true);
+                }}
+                disabled={!canAddTransaction}
+                title={
+                  !canAddTransaction
+                    ? 'You can add transactions once your partner joins.'
+                    : ''
+                }
+                style={{
+                  ...styles.button,
+                  ...styles.transactionButton,
+                  ...(canAddTransaction
+                    ? {}
+                    : { background: '#9ca3af', cursor: 'not-allowed' }),
+                }}
                 onMouseEnter={(e) => {
-                  e.target.style.transform = 'translateY(-2px)';
-                  e.target.style.boxShadow =
-                    '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
+                  if (canAddTransaction) {
+                    e.target.style.transform = 'translateY(-2px)';
+                    e.target.style.boxShadow =
+                      '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.transform = 'translateY(0)';
-                  e.target.style.boxShadow =
-                    '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                  if (canAddTransaction) {
+                    e.target.style.transform = 'translateY(0)';
+                    e.target.style.boxShadow =
+                      '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                  }
                 }}
               >
                 <Plus size={16} />
@@ -499,14 +506,12 @@ const GroupPage = () => {
               <button
                 onClick={() => setShowModal(false)}
                 style={styles.closeButton}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = '#f3f4f6';
-                  e.target.style.color = '#111827';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = 'transparent';
-                  e.target.style.color = '#6b7280';
-                }}
+                onMouseEnter={(e) =>
+                  Object.assign(e.target.style, styles.closeButtonHover)
+                }
+                onMouseLeave={(e) =>
+                  Object.assign(e.target.style, styles.closeButton)
+                }
               >
                 <X size={20} />
               </button>
@@ -539,14 +544,12 @@ const GroupPage = () => {
               <button
                 onClick={() => setShowTransactionModal(false)}
                 style={styles.closeButton}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = '#f3f4f6';
-                  e.target.style.color = '#111827';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = 'transparent';
-                  e.target.style.color = '#6b7280';
-                }}
+                onMouseEnter={(e) =>
+                  Object.assign(e.target.style, styles.closeButtonHover)
+                }
+                onMouseLeave={(e) =>
+                  Object.assign(e.target.style, styles.closeButton)
+                }
               >
                 <X size={20} />
               </button>

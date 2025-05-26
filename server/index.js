@@ -1,5 +1,4 @@
 // server/index.js
-
 require('dotenv').config();
 
 const express = require('express');
@@ -8,8 +7,17 @@ const requireAuth = require('./middleware/requireAuth');
 const cors = require('cors');
 
 const app = express();
+const server = require('http').createServer(app);
 
-// CORS setup
+const io = require('socket.io')(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
+});
+
+// CORS setup (only once)
 app.use(
   cors({
     origin: process.env.CLIENT_URL || 'http://localhost:3000',
@@ -17,17 +25,8 @@ app.use(
   })
 );
 
-// Body parsing
+// Body parsing (only once)
 app.use(express.json());
-
-const authRoutes = require('./routes/auth');
-app.use('/api/auth', authRoutes);
-const groupRoutes = require('./routes/groups');
-app.use('/api/groups', groupRoutes);
-const transactionRoutes = require('./routes/transactions');
-app.use('/api/transactions', requireAuth, transactionRoutes);
-const memberBalanceRoutes = require('./routes/memberBalance');
-app.use('/api/memberBalance', requireAuth, memberBalanceRoutes);
 
 // Connect to MongoDB
 mongoose
@@ -38,7 +37,24 @@ mongoose
   .then(() => console.log('MongoDB connected'))
   .catch((err) => console.error('MongoDB connection error:', err));
 
-// Your routes go here
+// Routes
+
+app.set('io', io);
+
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes);
+
+// Some routes are protected, so we apply requireAuth middleware locally
+const groupRoutes = require('./routes/groups');
+app.use('/api/groups', groupRoutes);
+
+const transactionRoutes = require('./routes/transactions');
+app.use('/api/transactions', requireAuth, transactionRoutes);
+
+const memberBalanceRoutes = require('./routes/memberBalance');
+app.use('/api/memberBalance', requireAuth, memberBalanceRoutes);
+
+// Test route
 app.get('/api/test-db', async (req, res) => {
   try {
     await mongoose.connection.db.admin().ping();
@@ -48,6 +64,28 @@ app.get('/api/test-db', async (req, res) => {
   }
 });
 
-app.listen(process.env.PORT || 5000, () => {
-  console.log(`Server running on port ${process.env.PORT || 5000}`);
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+
+  // Handle custom events
+  socket.on('join-room', (roomId) => {
+    socket.join(roomId);
+    console.log(`User ${socket.id} joined room ${roomId}`);
+  });
+
+  socket.on('send-message', (data) => {
+    // Emit to specific room or broadcast
+    socket.to(data.room).emit('receive-message', data);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+  });
+});
+
+// Start server (only once, using server not app)
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

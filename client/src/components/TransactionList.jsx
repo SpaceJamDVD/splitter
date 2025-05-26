@@ -2,6 +2,7 @@ import React, { useEffect, useState, useContext } from 'react';
 import { getGroupTransactions, settleUp } from '../services/transactionService';
 import { getBalancesForGroup } from '../services/memberBalanceService';
 import { AuthContext } from '../contexts/AuthContext';
+import socketService from '../services/socket';
 import {
   DollarSign,
   Calendar,
@@ -14,35 +15,163 @@ import {
 } from 'lucide-react';
 
 const TransactionList = ({ groupId, members: allGroupMembers }) => {
-  const { user } = useContext(AuthContext);
+  const { user, token } = useContext(AuthContext);
   const [transactions, setTransactions] = useState([]);
   const [memberBalances, setMemberBalances] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
 
+  // Socket connection and room management
   useEffect(() => {
-    const fetchData = async () => {
-      if (!groupId) return;
+    if (!groupId || !token) return;
 
-      try {
-        setLoading(true);
+    console.log('Setting up socket connection for group:', groupId);
 
-        // Fetch both transactions and balances
-        const [transactionsData, balancesData] = await Promise.all([
-          getGroupTransactions(groupId),
-          getBalancesForGroup(groupId),
-        ]);
+    // Connect to socket with authentication
+    const socket = socketService.connect(token);
 
-        setTransactions(transactionsData);
-        setMemberBalances(balancesData);
-      } catch (err) {
-        console.error('Failed to fetch data:', err);
-        setError('Failed to load data');
-      } finally {
-        setLoading(false);
+    // Setup connection listeners
+    const handleConnect = () => {
+      setIsSocketConnected(true);
+      console.log('Socket connected, joining group room:', `group-${groupId}`);
+      socketService.joinRoom(`group-${groupId}`);
+    };
+
+    const handleDisconnect = () => {
+      setIsSocketConnected(false);
+      console.log('Socket disconnected');
+    };
+
+    const handleConnectError = (error) => {
+      console.error('Socket connection error:', error);
+      setIsSocketConnected(false);
+    };
+
+    // Set up connection event listeners
+    socketService.on('connect', handleConnect);
+    socketService.on('disconnect', handleDisconnect);
+    socketService.on('connect_error', handleConnectError);
+
+    // If already connected, join room immediately
+    if (socketService.isConnected()) {
+      handleConnect();
+    }
+
+    // Cleanup function
+    return () => {
+      console.log('Leaving group room:', `group-${groupId}`);
+      socketService.leaveRoom(`group-${groupId}`);
+      socketService.off('connect', handleConnect);
+      socketService.off('disconnect', handleDisconnect);
+      socketService.off('connect_error', handleConnectError);
+    };
+  }, [groupId, token]);
+
+  // Real-time transaction updates
+  useEffect(() => {
+    if (!isSocketConnected || !groupId) return;
+
+    const handleTransactionUpdate = (data) => {
+      // Only process updates for this group
+      if (data.groupId !== groupId) {
+        return;
+      }
+
+      switch (data.type) {
+        case 'created':
+          setTransactions((prev) => {
+            // Check if transaction already exists to avoid duplicates
+            const exists = prev.some((t) => t._id === data.transaction._id);
+            if (exists) {
+              return prev;
+            }
+            return [data.transaction, ...prev];
+          });
+          break;
+
+        case 'updated':
+          setTransactions((prev) => {
+            return prev.map((t) =>
+              t._id === data.transaction._id ? data.transaction : t
+            );
+          });
+          break;
+
+        case 'deleted':
+          setTransactions((prev) => {
+            return prev.filter((t) => t._id !== data.transactionId);
+          });
+          break;
+
+        default:
+      }
+
+      // Refetch balances when transactions change
+      fetchBalances();
+    };
+
+    const handleBalanceUpdate = (data) => {
+      if (data.groupId === groupId) {
+        setMemberBalances(data.balances);
       }
     };
 
+    const handleGroupSettled = (data) => {
+      if (data.groupId === groupId) {
+        // Refresh both transactions and balances
+        fetchData();
+      }
+    };
+
+    // Listen for real-time events
+    socketService.on('transaction-update', handleTransactionUpdate);
+    socketService.on('balance-update', handleBalanceUpdate);
+    socketService.on('group-settled', handleGroupSettled);
+
+    // Cleanup
+    return () => {
+      socketService.off('transaction-update', handleTransactionUpdate);
+      socketService.off('balance-update', handleBalanceUpdate);
+      socketService.off('group-settled', handleGroupSettled);
+    };
+  }, [isSocketConnected, groupId]);
+
+  // Helper function to fetch balances
+  const fetchBalances = async () => {
+    try {
+      const balancesData = await getBalancesForGroup(groupId);
+      setMemberBalances(balancesData);
+    } catch (err) {
+      console.error('Failed to fetch balances:', err);
+    }
+  };
+
+  // Helper function to fetch all data
+  const fetchData = async () => {
+    if (!groupId) return;
+
+    try {
+      setLoading(true);
+
+      // Fetch both transactions and balances
+      const [transactionsData, balancesData] = await Promise.all([
+        getGroupTransactions(groupId),
+        getBalancesForGroup(groupId),
+      ]);
+
+      setTransactions(transactionsData);
+      setMemberBalances(balancesData);
+    } catch (err) {
+      console.error('Failed to fetch data:', err);
+      setError('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial data fetch
+  useEffect(() => {
     fetchData();
   }, [groupId]);
 
@@ -78,10 +207,6 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
   const handleSettleUp = async () => {
     try {
       await settleUp(groupId);
-
-      // Refetch balances after settlement
-      const updatedBalances = await getBalancesForGroup(groupId);
-      setMemberBalances(updatedBalances);
 
       alert('Settled up successfully!');
     } catch (err) {
@@ -138,6 +263,7 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
     },
     header: {
       marginBottom: '32px',
+      position: 'relative',
     },
     title: {
       fontSize: '30px',
@@ -150,6 +276,26 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
       color: '#6b7280',
       fontSize: '16px',
       margin: 0,
+    },
+    connectionStatus: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      padding: '4px 12px',
+      borderRadius: '20px',
+      fontSize: '12px',
+      fontWeight: '500',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+    },
+    connected: {
+      backgroundColor: '#dcfce7',
+      color: '#166534',
+    },
+    disconnected: {
+      backgroundColor: '#fee2e2',
+      color: '#991b1b',
     },
     balanceCard: {
       background: 'white',
@@ -189,10 +335,7 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
       fontSize: '14px',
     },
-    settleButtonHover: {
-      transform: 'scale(1.05)',
-      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-    },
+    // ... (rest of your existing styles - keeping them the same)
     balanceGrid: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
@@ -340,9 +483,6 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
       transition: 'background-color 0.15s ease',
       cursor: 'pointer',
     },
-    tableRowHover: {
-      backgroundColor: '#f9fafb',
-    },
     tableCell: {
       padding: '16px 24px',
       borderBottom: '1px solid #f3f4f6',
@@ -414,7 +554,7 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
 
   return (
     <div style={styles.container}>
-      {/* Header Section */}
+      {/* Header Section with Connection Status */}
       <div style={styles.header}>
         <h1 style={styles.title}>Expense Tracker</h1>
         <p style={styles.subtitle}>Track and manage your shared expenses</p>

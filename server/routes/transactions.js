@@ -1,7 +1,7 @@
 // server/routes/transactions.js
 const express = require('express');
 const router = express.Router();
-const transactionController = require('../controllers/transactionsController');
+const transactionController = require('../controllers/transactionController');
 
 // All routes are protected (requireAuth middleware applied in index.js)
 router.post('/', transactionController.createTransaction);

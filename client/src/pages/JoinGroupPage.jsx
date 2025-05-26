@@ -3,22 +3,23 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import LoginForm from '../components/LoginForm';
-import API from '../api';
+import { getInviteInfo, joinGroupWithToken } from '../services/groupService';
 
 const JoinGroupPage = () => {
   const { inviteToken } = useParams();
-  const { user } = useContext(AuthContext);
+  const { user, login } = useContext(AuthContext);
   const navigate = useNavigate();
   const [groupInfo, setGroupInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [joining, setJoining] = useState(false);
 
+  // Fetch group info on mount
   useEffect(() => {
     const fetchGroupInfo = async () => {
       try {
-        // Get group info from invite token
-        const response = await API.get(`/groups/invite/${inviteToken}`);
-        setGroupInfo(response.data);
+        const response = await getInviteInfo(inviteToken);
+        setGroupInfo(response);
       } catch (err) {
         setError('Invalid or expired invite link');
       } finally {
@@ -26,23 +27,61 @@ const JoinGroupPage = () => {
       }
     };
 
-    // If user is already logged in, try to join directly
-    if (user) {
-      handleJoinExistingUser();
-    } else {
-      fetchGroupInfo();
-    }
-  }, [user, inviteToken]);
+    fetchGroupInfo();
+  }, [inviteToken]);
 
-  const handleJoinExistingUser = async () => {
-    try {
-      const response = await API.post(`/groups/join/${inviteToken}`);
-      if (response.data.message) {
+  // Auto-join for authenticated users who aren't members
+  useEffect(() => {
+    if (user && groupInfo && !joining) {
+      // Check if user is already a member
+      const isAlreadyMember = groupInfo.members?.some(
+        (member) => member._id === user.userId
+      );
+
+      if (isAlreadyMember) {
+        console.log('User is already a member, redirecting...');
         navigate('/dashboard');
+        return;
       }
+
+      // User is logged in but not a member - join them automatically
+      handleJoinGroup();
+    }
+  }, [user, groupInfo, joining]);
+
+  const handleJoinGroup = async (userData = null) => {
+    if (joining) return;
+
+    // IMPORTANT: Only proceed if we have valid user data for new users
+    // or if the user is already authenticated
+    if (!user && (!userData || !userData.username || !userData.password)) {
+      setError('Please provide a username and password to join');
+      return;
+    }
+
+    setJoining(true);
+    setError(''); // Clear any previous errors
+
+    try {
+      // Only pass userData if it exists and has required fields
+      const requestData =
+        userData && userData.username && userData.password
+          ? userData
+          : undefined;
+
+      const response = await joinGroupWithToken(inviteToken, requestData);
+
+      // If new user was created, log them in
+      if (response.token) {
+        await login(response.token);
+      }
+
+      // Navigate to the dashboard
+      navigate('/dashboard');
     } catch (err) {
-      setError('Failed to join group');
-      setLoading(false);
+      console.error('Join group error:', err);
+      setError(err.response?.data?.error || 'Failed to join group');
+      setJoining(false); // Reset joining state on error
     }
   };
 
@@ -93,15 +132,13 @@ const JoinGroupPage = () => {
     return (
       <div style={styles.container}>
         <div style={styles.loadingContainer}>
-          <p style={styles.loadingText}>
-            {user ? 'Joining group...' : 'Loading invite...'}
-          </p>
+          <p style={styles.loadingText}>Loading invite...</p>
         </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !groupInfo) {
     return (
       <div style={styles.container}>
         <div style={styles.errorContainer}>
@@ -112,13 +149,37 @@ const JoinGroupPage = () => {
     );
   }
 
+  if (joining) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.loadingContainer}>
+          <p style={styles.loadingText}>Joining group...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login form for non-authenticated users
+  if (!user) {
+    return (
+      <div style={styles.container}>
+        <LoginForm
+          mode="join"
+          inviteToken={inviteToken}
+          groupName={groupInfo?.groupName}
+          onJoinGroup={handleJoinGroup}
+          error={error}
+        />
+      </div>
+    );
+  }
+
+  // This shouldn't be reached due to auto-join effect, but just in case
   return (
     <div style={styles.container}>
-      <LoginForm
-        mode="join"
-        inviteToken={inviteToken}
-        groupName={groupInfo?.groupName}
-      />
+      <div style={styles.loadingContainer}>
+        <p style={styles.loadingText}>Joining group...</p>
+      </div>
     </div>
   );
 };

@@ -19,7 +19,12 @@ export const getGroupById = async (id) => {
   return response.data;
 };
 
-export const joinGroupWithToken = async (inviteToken) => {
-  const response = await API.post(`/groups/join/${inviteToken}`);
+export const getInviteInfo = async (inviteToken) => {
+  const response = await API.get(`/groups/invite/${inviteToken}`);
+  return response.data;
+};
+
+export const joinGroupWithToken = async (inviteToken, userData = {}) => {
+  const response = await API.post(`/groups/join/${inviteToken}`, userData);
   return response.data;
 };

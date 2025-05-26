@@ -22,17 +22,8 @@ app.use(express.json());
 
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
-
-const groupController = require('./controllers/groupController');
-
-// Public invite routes
-app.get('/api/groups/invite/:inviteToken', groupController.getInviteInfo);
-app.post('/api/groups/join/:inviteToken', groupController.joinGroup);
-
-// PROTECTED GROUP ROUTES
 const groupRoutes = require('./routes/groups');
-app.use('/api/groups', requireAuth, groupRoutes);
-
+app.use('/api/groups', groupRoutes);
 const transactionRoutes = require('./routes/transactions');
 app.use('/api/transactions', requireAuth, transactionRoutes);
 const memberBalanceRoutes = require('./routes/memberBalance');

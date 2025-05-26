@@ -17,6 +17,8 @@ function LoginForm({
   inviteToken = null,
   groupName = null,
   onSuccess = null,
+  onJoinGroup = null, // Add this prop for join mode
+  error = null, // Add this prop to receive errors from parent
 }) {
   const [formData, setFormData] = useState({
     username: '',
@@ -33,6 +35,14 @@ function LoginForm({
 
   const isJoinMode = mode === 'join';
   const isRegisterMode = currentMode === 'register' || isJoinMode;
+
+  // Display error from parent component if provided
+  React.useEffect(() => {
+    if (error) {
+      setMessage(error);
+      setMessageType('error');
+    }
+  }, [error]);
 
   const handleInputChange = (field) => (e) => {
     setFormData((prev) => ({ ...prev, [field]: e.target.value }));
@@ -114,20 +124,32 @@ function LoginForm({
 
     try {
       setLoading(true);
-      const response = await API.post(`/groups/join/${inviteToken}`, {
-        username: formData.username,
-        email: formData.email,
-        password: formData.password,
-      });
 
-      if (response.data.token) {
-        localStorage.setItem('token', response.data.token);
-        setMessage('Account created and joined group successfully!');
-        setMessageType('success');
+      // If onJoinGroup prop is provided (from JoinGroupPage), use it
+      if (onJoinGroup) {
+        // Pass the form data to the parent component's handler
+        await onJoinGroup({
+          username: formData.username,
+          email: formData.email,
+          password: formData.password,
+        });
+      } else {
+        // Otherwise, handle it directly (backward compatibility)
+        const response = await API.post(`/groups/join/${inviteToken}`, {
+          username: formData.username,
+          email: formData.email,
+          password: formData.password,
+        });
 
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 1500);
+        if (response.data.token) {
+          localStorage.setItem('token', response.data.token);
+          setMessage('Account created and joined group successfully!');
+          setMessageType('success');
+
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 1500);
+        }
       }
     } catch (err) {
       setMessage(err.response?.data?.error || 'Failed to join group');

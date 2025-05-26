@@ -237,7 +237,7 @@ const Navbar = () => {
 
       <nav style={styles.navbar}>
         <div style={styles.header}>
-          <div style={styles.logo}>Splitter</div>
+          <div style={styles.logo}>OurExpenses</div>
           {isMobile && isOpen && (
             <button
               onClick={closeMobileMenu}
@@ -313,7 +313,7 @@ const Navbar = () => {
         </div>
 
         <div style={styles.footer}>
-          <p style={styles.footerText}>© 2025 Splitter</p>
+          <p style={styles.footerText}>© 2025 OurExpenses</p>
         </div>
       </nav>
     </>

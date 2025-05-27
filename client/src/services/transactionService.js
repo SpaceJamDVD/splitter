@@ -29,3 +29,8 @@ export const settleUp = async (groupId) => {
   const res = await API.post('/transactions/settle', { groupId });
   return res.data;
 };
+
+export const getRecentTotal = async (groupId) => {
+  const response = await API.get(`/transactions/recent-total/${groupId}`);
+  return response.data;
+};

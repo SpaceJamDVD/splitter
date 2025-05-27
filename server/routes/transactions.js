@@ -7,5 +7,6 @@ const transactionController = require('../controllers/transactionController');
 router.post('/', transactionController.createTransaction);
 router.get('/group/:groupId', transactionController.getGroupTransactions);
 router.post('/settle', transactionController.settleUp);
+router.get('/recent-total/:groupId', transactionController.getRecentTotal);
 
 module.exports = router;

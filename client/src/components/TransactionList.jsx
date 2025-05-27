@@ -1,8 +1,12 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { getGroupTransactions, settleUp } from '../services/transactionService';
+import {
+  getGroupTransactions,
+  settleUp,
+  getRecentTotal,
+} from '../services/transactionService';
 import { getBalancesForGroup } from '../services/memberBalanceService';
 import { AuthContext } from '../contexts/AuthContext';
-import socketService from '../services/socket';
+import socketService from '../services/socketService'; // Import your socket service
 import {
   DollarSign,
   Calendar,
@@ -15,18 +19,18 @@ import {
 } from 'lucide-react';
 
 const TransactionList = ({ groupId, members: allGroupMembers }) => {
-  const { user, token } = useContext(AuthContext);
+  const { user, token } = useContext(AuthContext); // Make sure you have token in AuthContext
   const [transactions, setTransactions] = useState([]);
   const [memberBalances, setMemberBalances] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const [recentTotal, setRecentTotal] = useState(0);
+  const [recentSumTransactions, setRecentSumTransactions] = useState(0);
 
   // Socket connection and room management
   useEffect(() => {
     if (!groupId || !token) return;
-
-    console.log('Setting up socket connection for group:', groupId);
 
     // Connect to socket with authentication
     const socket = socketService.connect(token);
@@ -34,13 +38,11 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
     // Setup connection listeners
     const handleConnect = () => {
       setIsSocketConnected(true);
-      console.log('Socket connected, joining group room:', `group-${groupId}`);
       socketService.joinRoom(`group-${groupId}`);
     };
 
     const handleDisconnect = () => {
       setIsSocketConnected(false);
-      console.log('Socket disconnected');
     };
 
     const handleConnectError = (error) => {
@@ -60,7 +62,6 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
 
     // Cleanup function
     return () => {
-      console.log('Leaving group room:', `group-${groupId}`);
       socketService.leaveRoom(`group-${groupId}`);
       socketService.off('connect', handleConnect);
       socketService.off('disconnect', handleDisconnect);
@@ -119,7 +120,6 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
 
     const handleGroupSettled = (data) => {
       if (data.groupId === groupId) {
-        // Refresh both transactions and balances
         fetchData();
       }
     };
@@ -155,13 +155,17 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
       setLoading(true);
 
       // Fetch both transactions and balances
-      const [transactionsData, balancesData] = await Promise.all([
-        getGroupTransactions(groupId),
-        getBalancesForGroup(groupId),
-      ]);
+      const [transactionsData, balancesData, recentTotalData] =
+        await Promise.all([
+          getGroupTransactions(groupId),
+          getBalancesForGroup(groupId),
+          getRecentTotal(groupId),
+        ]);
 
       setTransactions(transactionsData);
       setMemberBalances(balancesData);
+      setRecentTotal(recentTotalData.totalAmount);
+      setRecentSumTransactions(recentTotalData.transactionCount);
     } catch (err) {
       console.error('Failed to fetch data:', err);
       setError('Failed to load data');
@@ -335,7 +339,6 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
       fontSize: '14px',
     },
-    // ... (rest of your existing styles - keeping them the same)
     balanceGrid: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
@@ -513,6 +516,104 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
       fontWeight: '600',
       color: '#111827',
     },
+    settlementRow: {
+      backgroundColor: '#f0fdf4',
+      borderLeft: '4px solid #16a34a',
+      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+    },
+    settlementBadge: {
+      backgroundColor: '#16a34a',
+      color: 'white',
+      padding: '2px 8px',
+      borderRadius: '12px',
+      fontSize: '10px',
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      marginLeft: '8px',
+    },
+    settlementAmount: {
+      color: '#16a34a',
+      fontWeight: '700',
+    },
+    settlementDescription: {
+      color: '#166534',
+      fontWeight: '600',
+      fontStyle: 'italic',
+    },
+    owedToPurchaserRow: {
+      backgroundColor: '#fef3c7',
+      borderLeft: '4px solid #f59e0b',
+      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+    },
+    owedToPurchaserBadge: {
+      backgroundColor: '#f59e0b',
+      color: 'white',
+      padding: '2px 8px',
+      borderRadius: '12px',
+      fontSize: '10px',
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      marginLeft: '8px',
+    },
+    owedToPurchaserAmount: {
+      color: '#d97706',
+      fontWeight: '700',
+    },
+    owedToPurchaserDescription: {
+      color: '#92400e',
+      fontWeight: '600',
+    },
+    settlementRow: {
+      backgroundColor: '#f0fdf4',
+      borderLeft: '4px solid #16a34a',
+      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+    },
+    settlementBadge: {
+      backgroundColor: '#16a34a',
+      color: 'white',
+      padding: '2px 8px',
+      borderRadius: '12px',
+      fontSize: '10px',
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      marginLeft: '8px',
+    },
+    settlementAmount: {
+      color: '#16a34a',
+      fontWeight: '700',
+    },
+    settlementDescription: {
+      color: '#166534',
+      fontWeight: '600',
+      fontStyle: 'italic',
+    },
+    owedToPurchaserRow: {
+      backgroundColor: '#fef3c7',
+      borderLeft: '4px solid #f59e0b',
+      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+    },
+    owedToPurchaserBadge: {
+      backgroundColor: '#f59e0b',
+      color: 'white',
+      padding: '2px 8px',
+      borderRadius: '12px',
+      fontSize: '10px',
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      marginLeft: '8px',
+    },
+    owedToPurchaserAmount: {
+      color: '#d97706',
+      fontWeight: '700',
+    },
+    owedToPurchaserDescription: {
+      color: '#92400e',
+      fontWeight: '600',
+    },
     userContainer: {
       display: 'flex',
       alignItems: 'center',
@@ -633,7 +734,7 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
                 }}
               >
                 <p style={{ fontWeight: '500', margin: '0 0 4px 0' }}>
-                  You are owed money
+                  You spent more
                 </p>
                 <p style={{ margin: 0 }}>
                   {Object.entries(balances)
@@ -661,7 +762,7 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
                 }}
               >
                 <p style={{ fontWeight: '500', margin: '0 0 4px 0' }}>
-                  You owe money
+                  You spent less
                 </p>
                 <p style={{ margin: 0 }}>
                   {Object.entries(balances)
@@ -701,20 +802,22 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
           <div style={styles.statsGrid}>
             <div style={{ ...styles.statCard, ...styles.statCardPurple }}>
               <div>
-                <p style={styles.statLabel}>Total Expenses</p>
+                <p style={styles.statLabel}>
+                  Total Expense Since Last Settlement
+                </p>
                 <p style={{ ...styles.statValue, color: '#7c3aed' }}>
-                  {formatCurrency(
-                    transactions.reduce((sum, tx) => sum + tx.amount, 0)
-                  )}
+                  {formatCurrency(recentTotal)}
                 </p>
               </div>
               <DollarSign size={32} color="#a855f7" />
             </div>
             <div style={{ ...styles.statCard, ...styles.statCardOrange }}>
               <div>
-                <p style={styles.statLabel}>Total Transactions</p>
+                <p style={styles.statLabel}>
+                  Amount of transactions since last settlement
+                </p>
                 <p style={{ ...styles.statValue, color: '#ea580c' }}>
-                  {transactions.length}
+                  {recentSumTransactions}
                 </p>
               </div>
               <FileText size={32} color="#fb923c" />
@@ -769,64 +872,144 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((tx) => (
-                  <tr
-                    key={tx._id}
-                    style={styles.tableRow}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor = '#f9fafb')
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.backgroundColor = 'transparent')
-                    }
-                  >
-                    <td style={styles.tableCell}>
-                      <div>
-                        <div style={styles.transactionDescription}>
-                          {tx.description || 'No description'}
+                {transactions.map((tx) => {
+                  const isSettlement =
+                    tx.isSettlement ||
+                    tx.category?.toLowerCase() === 'settlement';
+                  const isOwedToPurchaser = tx.owedToPurchaser && !isSettlement;
+
+                  return (
+                    <tr
+                      key={tx._id}
+                      style={{
+                        ...styles.tableRow,
+                        ...(isSettlement ? styles.settlementRow : {}),
+                        ...(isOwedToPurchaser ? styles.owedToPurchaserRow : {}),
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.backgroundColor = isSettlement
+                          ? '#dcfce7'
+                          : isOwedToPurchaser
+                          ? '#fde68a'
+                          : '#f9fafb')
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor = isSettlement
+                          ? '#f0fdf4'
+                          : isOwedToPurchaser
+                          ? '#fef3c7'
+                          : 'transparent')
+                      }
+                    >
+                      <td style={styles.tableCell}>
+                        <div>
+                          <div
+                            style={{
+                              ...styles.transactionDescription,
+                              ...(isSettlement
+                                ? styles.settlementDescription
+                                : {}),
+                              ...(isOwedToPurchaser
+                                ? styles.owedToPurchaserDescription
+                                : {}),
+                            }}
+                          >
+                            {isSettlement
+                              ? 'Settlement Payment'
+                              : tx.description || 'No description'}
+                          </div>
+                          {tx.notes && (
+                            <div style={styles.transactionNotes}>
+                              {tx.notes}
+                            </div>
+                          )}
                         </div>
-                        {tx.notes && (
-                          <div style={styles.transactionNotes}>{tx.notes}</div>
+                      </td>
+                      <td style={styles.tableCell}>
+                        <div style={styles.categoryContainer}>
+                          <span style={{ fontSize: '18px' }}>
+                            {isSettlement ? '💰' : getCategoryIcon(tx.category)}
+                          </span>
+                          <span style={styles.categoryText}>
+                            {isSettlement
+                              ? 'Settlement'
+                              : tx.category || 'Uncategorized'}
+                          </span>
+                        </div>
+                      </td>
+                      <td style={styles.tableCell}>
+                        <span
+                          style={{
+                            ...styles.amountText,
+                            ...(isSettlement ? styles.settlementAmount : {}),
+                            ...(isOwedToPurchaser
+                              ? styles.owedToPurchaserAmount
+                              : {}),
+                          }}
+                        >
+                          {formatCurrency(tx.amount)}
+                        </span>
+                        {isOwedToPurchaser && (
+                          <div
+                            style={{
+                              fontSize: '11px',
+                              color: '#92400e',
+                              fontWeight: '600',
+                              marginTop: '2px',
+                            }}
+                          >
+                            Owed full amount
+                          </div>
                         )}
-                      </div>
-                    </td>
-                    <td style={styles.tableCell}>
-                      <div style={styles.categoryContainer}>
-                        <span style={{ fontSize: '18px' }}>
-                          {getCategoryIcon(tx.category)}
-                        </span>
-                        <span style={styles.categoryText}>
-                          {tx.category || 'Uncategorized'}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={styles.tableCell}>
-                      <span style={styles.amountText}>
-                        {formatCurrency(tx.amount)}
-                      </span>
-                    </td>
-                    <td style={styles.tableCell}>
-                      <div style={styles.userContainer}>
-                        <div style={styles.userAvatar}>
-                          <User size={16} color="white" />
+                      </td>
+                      <td style={styles.tableCell}>
+                        <div style={styles.userContainer}>
+                          <div
+                            style={{
+                              ...styles.userAvatar,
+                              ...(isSettlement
+                                ? {
+                                    background:
+                                      'linear-gradient(135deg, #16a34a 0%, #22c55e 100%)',
+                                  }
+                                : isOwedToPurchaser
+                                ? {
+                                    background:
+                                      'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
+                                  }
+                                : {}),
+                            }}
+                          >
+                            <User size={16} color="white" />
+                          </div>
+                          <span style={styles.userName}>
+                            {tx.paidBy?.username || 'Unknown'}
+                          </span>
+                          {isOwedToPurchaser && (
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                color: '#92400e',
+                                fontWeight: '600',
+                                marginLeft: '4px',
+                              }}
+                            ></span>
+                          )}
                         </div>
-                        <span style={styles.userName}>
-                          {tx.paidBy?.username || 'Unknown'}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={styles.tableCell}>
-                      <div style={styles.dateContainer}>
-                        <Calendar size={16} />
-                        {new Date(tx.date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td style={styles.tableCell}>
+                        <div style={styles.dateContainer}>
+                          <Calendar size={16} />
+                          {new Date(tx.date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -96,20 +96,8 @@ class SocketService {
 
   // Setup connection event listeners
   setupConnectionListeners() {
-    this.socket.on('connect', () => {
-      console.log('Connected to server:', this.socket.id);
-    });
-
-    this.socket.on('disconnect', (reason) => {
-      console.log('Disconnected from server:', reason);
-    });
-
     this.socket.on('connect_error', (error) => {
       console.error('Connection error:', error);
-    });
-
-    this.socket.on('reconnect', (attemptNumber) => {
-      console.log('Reconnected to server. Attempt:', attemptNumber);
     });
 
     this.socket.on('reconnect_error', (error) => {

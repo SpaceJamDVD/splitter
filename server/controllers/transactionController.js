@@ -433,7 +433,7 @@ class TransactionController {
           splitEvenly: false,
           customSplit: [],
           category: 'Settlement',
-          notes: `Automatic settlement payment from ${payer.username} to ${recipient.username} to balance accounts.`,
+          notes: `${payer.username} paid ${recipient.username} back.`,
           date: new Date(),
         });
 
@@ -509,7 +509,7 @@ class TransactionController {
     }
   }
 
-  // Helper method to recalculate balances (optional)
+  // Helper method to recalculate balances
   async recalculateGroupBalances(groupId) {
     try {
       // Reset all balances
@@ -565,6 +565,59 @@ class TransactionController {
     } catch (err) {
       console.error('Error recalculating balances:', err);
       throw err;
+    }
+  }
+
+  async getRecentTotal(req, res) {
+    const { groupId } = req.params;
+    const userId = req.user.userId;
+
+    try {
+      // Verify user is in the group
+      const group = await Group.findById(groupId);
+      if (!group) {
+        return res.status(404).json({ error: 'Group not found' });
+      }
+
+      if (!group.members.includes(userId)) {
+        return res
+          .status(403)
+          .json({ error: 'Not authorized to view this group' });
+      }
+
+      // Get all transactions for the group, sorted by date (newest first)
+      const allTransactions = await Transaction.find({ groupId })
+        .sort({ date: -1 })
+        .populate('paidBy', 'username email');
+
+      if (allTransactions.length === 0) {
+        return res.status(404).json({ error: 'No transactions found' });
+      }
+
+      let totalSum = 0;
+      const transactionsToSum = [];
+
+      // Sum transactions until we hit a settlement
+      for (const transaction of allTransactions) {
+        if (transaction.isSettlement) {
+          // Stop when we hit a settlement, don't include it in the sum
+          break;
+        }
+
+        totalSum += transaction.amount;
+        transactionsToSum.push(transaction);
+      }
+
+      res.json({
+        totalAmount: totalSum,
+        transactionCount: transactionsToSum.length,
+      });
+    } catch (err) {
+      console.error('Error fetching recent total:', err);
+      res.status(500).json({
+        error: 'Failed to fetch recent total',
+        details: err.message,
+      });
     }
   }
 }

@@ -8,7 +8,7 @@ import {
   getCategories,
 } from '../services/budgetService';
 import { AuthContext } from '../contexts/AuthContext';
-import socketService from '../services/socketService';
+import BudgetForm from './BudgetForm';
 import {
   DollarSign,
   Plus,
@@ -18,8 +18,6 @@ import {
   Target,
   TrendingUp,
   Calendar,
-  CheckCircle,
-  X,
 } from 'lucide-react';
 
 const BudgetManagement = ({ groupId }) => {
@@ -32,25 +30,16 @@ const BudgetManagement = ({ groupId }) => {
     all: [],
   });
   const [loading, setLoading] = useState(true);
+  const [formLoading, setFormLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingBudget, setEditingBudget] = useState(null);
-  const [formData, setFormData] = useState({
-    category: '',
-    customCategory: '',
-    amount: '',
-    period: 'monthly',
-    alertAt: 80,
-  });
 
-  // Socket connection for real-time updates
   useEffect(() => {
     const fetchAllData = async () => {
       if (!groupId) return;
-
       try {
         setLoading(true);
-
         await Promise.all([fetchBudgets(), fetchOverview(), fetchCategories()]);
       } catch (err) {
         console.error('Budget fetch error:', err);
@@ -63,7 +52,6 @@ const BudgetManagement = ({ groupId }) => {
     fetchAllData();
   }, [groupId]);
 
-  // Fetch all data
   const fetchBudgets = async () => {
     try {
       const budgetsData = await getGroupBudgets(groupId);
@@ -92,59 +80,41 @@ const BudgetManagement = ({ groupId }) => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  const handleFormSubmit = async (budgetData) => {
     try {
-      const category =
-        formData.category === 'custom'
-          ? formData.customCategory
-          : formData.category;
+      setFormLoading(true);
 
-      const budgetData = {
+      const finalBudgetData = {
         groupId,
-        category,
-        amount: parseFloat(formData.amount),
-        period: formData.period,
-        alertAt: parseInt(formData.alertAt),
-        isCustomCategory: formData.category === 'custom',
+        ...budgetData,
       };
 
       if (editingBudget) {
-        await updateBudget(editingBudget._id, budgetData);
+        await updateBudget(editingBudget._id, finalBudgetData);
       } else {
-        await createBudget(budgetData);
+        await createBudget(finalBudgetData);
       }
 
-      // Reset form
-      setFormData({
-        category: '',
-        customCategory: '',
-        amount: '',
-        period: 'monthly',
-        alertAt: 80,
-      });
+      // Close form and refresh data
       setShowCreateForm(false);
       setEditingBudget(null);
-
-      await fetchBudgets();
-      await fetchOverview();
+      await Promise.all([fetchBudgets(), fetchOverview()]);
     } catch (err) {
       alert(
         'Failed to save budget: ' + (err.response?.data?.error || err.message)
       );
+    } finally {
+      setFormLoading(false);
     }
+  };
+
+  const handleFormClose = () => {
+    setShowCreateForm(false);
+    setEditingBudget(null);
   };
 
   const handleEdit = (budget) => {
     setEditingBudget(budget);
-    setFormData({
-      category: budget.isCustomCategory ? 'custom' : budget.category,
-      customCategory: budget.isCustomCategory ? budget.category : '',
-      amount: budget.amount.toString(),
-      period: budget.period,
-      alertAt: budget.alertAt,
-    });
     setShowCreateForm(true);
   };
 
@@ -153,8 +123,7 @@ const BudgetManagement = ({ groupId }) => {
 
     try {
       await deleteBudget(budgetId);
-      await fetchBudgets();
-      await fetchOverview();
+      await Promise.all([fetchBudgets(), fetchOverview()]);
     } catch (err) {
       alert(
         'Failed to delete budget: ' + (err.response?.data?.error || err.message)
@@ -479,6 +448,7 @@ const BudgetManagement = ({ groupId }) => {
     progressHeader: {
       display: 'flex',
       alignItems: 'center',
+      justifyContent: 'space-between',
       marginBottom: '8px',
     },
     progressLabel: {
@@ -508,109 +478,6 @@ const BudgetManagement = ({ groupId }) => {
       alignItems: 'center',
       fontSize: '13px',
       color: '#6b7280',
-    },
-    modal: {
-      position: 'fixed',
-      inset: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 50,
-      backdropFilter: 'blur(4px)',
-    },
-    modalContent: {
-      background: 'white',
-      borderRadius: '16px',
-      padding: '24px',
-      width: '100%',
-      maxWidth: '500px',
-      margin: '20px',
-      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    },
-    modalHeader: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '24px',
-    },
-    modalTitle: {
-      fontSize: '20px',
-      fontWeight: '600',
-      color: '#111827',
-      margin: 0,
-    },
-    closeButton: {
-      padding: '4px',
-      backgroundColor: 'transparent',
-      border: 'none',
-      cursor: 'pointer',
-      borderRadius: '6px',
-      color: '#6b7280',
-      transition: 'all 0.2s ease',
-    },
-    form: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '20px',
-    },
-    formGroup: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '8px',
-    },
-    label: {
-      fontSize: '14px',
-      fontWeight: '500',
-      color: '#374151',
-    },
-    input: {
-      padding: '12px',
-      border: '1px solid #d1d5db',
-      borderRadius: '8px',
-      fontSize: '14px',
-      transition: 'border-color 0.2s ease',
-      outline: 'none',
-    },
-    select: {
-      padding: '12px',
-      border: '1px solid #d1d5db',
-      borderRadius: '8px',
-      fontSize: '14px',
-      backgroundColor: 'white',
-      outline: 'none',
-    },
-    helpText: {
-      fontSize: '12px',
-      color: '#6b7280',
-      margin: '4px 0 0 0',
-    },
-    formActions: {
-      display: 'flex',
-      gap: '12px',
-      paddingTop: '16px',
-    },
-    submitButton: {
-      flex: 1,
-      background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-      color: 'white',
-      padding: '12px',
-      borderRadius: '8px',
-      border: 'none',
-      fontWeight: '500',
-      cursor: 'pointer',
-      fontSize: '14px',
-    },
-    cancelButton: {
-      flex: 1,
-      backgroundColor: '#f3f4f6',
-      color: '#374151',
-      padding: '12px',
-      borderRadius: '8px',
-      border: 'none',
-      fontWeight: '500',
-      cursor: 'pointer',
-      fontSize: '14px',
     },
     errorMessage: {
       padding: '16px 24px',
@@ -730,147 +597,15 @@ const BudgetManagement = ({ groupId }) => {
         </div>
       )}
 
-      {/* Create/Edit Budget Form */}
-      {showCreateForm && (
-        <div style={styles.modal}>
-          <div style={styles.modalContent}>
-            <div style={styles.modalHeader}>
-              <h2 style={styles.modalTitle}>
-                {editingBudget ? 'Edit Budget' : 'Create Budget'}
-              </h2>
-              <button
-                style={styles.closeButton}
-                onClick={() => {
-                  setShowCreateForm(false);
-                  setEditingBudget(null);
-                  setFormData({
-                    category: '',
-                    customCategory: '',
-                    amount: '',
-                    period: 'monthly',
-                    alertAt: 80,
-                  });
-                }}
-                onMouseEnter={(e) =>
-                  (e.target.style.backgroundColor = '#f3f4f6')
-                }
-                onMouseLeave={(e) =>
-                  (e.target.style.backgroundColor = 'transparent')
-                }
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <form style={styles.form} onSubmit={handleSubmit}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Category</label>
-                <select
-                  style={styles.select}
-                  value={formData.category}
-                  onChange={(e) =>
-                    setFormData({ ...formData, category: e.target.value })
-                  }
-                  required
-                >
-                  <option value="">Select Category</option>
-                  {categories.predefined.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                  <option value="custom">Custom Category</option>
-                </select>
-              </div>
-
-              {formData.category === 'custom' && (
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Custom Category Name</label>
-                  <input
-                    style={styles.input}
-                    type="text"
-                    value={formData.customCategory}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        customCategory: e.target.value,
-                      })
-                    }
-                    placeholder="Enter custom category name"
-                    required
-                  />
-                </div>
-              )}
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Budget Amount</label>
-                <input
-                  style={styles.input}
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.amount}
-                  onChange={(e) =>
-                    setFormData({ ...formData, amount: e.target.value })
-                  }
-                  placeholder="0.00"
-                  required
-                />
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Time Period</label>
-                <select
-                  style={styles.select}
-                  value={formData.period}
-                  onChange={(e) =>
-                    setFormData({ ...formData, period: e.target.value })
-                  }
-                >
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="quarterly">Quarterly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Alert Threshold (%)</label>
-                <input
-                  style={styles.input}
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={formData.alertAt}
-                  onChange={(e) =>
-                    setFormData({ ...formData, alertAt: e.target.value })
-                  }
-                  placeholder="80"
-                />
-                <p style={styles.helpText}>
-                  Get notified when spending reaches this percentage
-                </p>
-              </div>
-
-              <div style={styles.formActions}>
-                <button type="submit" style={styles.submitButton}>
-                  {editingBudget ? 'Update Budget' : 'Create Budget'}
-                </button>
-                <button
-                  type="button"
-                  style={styles.cancelButton}
-                  onClick={() => {
-                    setShowCreateForm(false);
-                    setEditingBudget(null);
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Budget Form Modal */}
+      <BudgetForm
+        isOpen={showCreateForm}
+        onClose={handleFormClose}
+        onSubmit={handleFormSubmit}
+        editingBudget={editingBudget}
+        categories={categories}
+        loading={formLoading}
+      />
 
       {/* Budget List */}
       <div style={styles.budgetsCard}>
@@ -917,7 +652,14 @@ const BudgetManagement = ({ groupId }) => {
                     </div>
                     <div style={styles.budgetDetails}>
                       <h3 style={styles.budgetName}>{budget.category}</h3>
-                      <p style={styles.budgetPeriod}>{budget.period} Budget</p>
+                      <p style={styles.budgetPeriod}>
+                        {budget.period} Budget
+                        {budget.isRepeating === false && (
+                          <span style={{ color: '#f59e0b', marginLeft: '8px' }}>
+                            • One-time
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
 
@@ -996,6 +738,7 @@ const BudgetManagement = ({ groupId }) => {
                 {/* Progress Bar */}
                 <div style={styles.progressContainer}>
                   <div style={styles.progressHeader}>
+                    <span style={styles.progressLabel}>Progress</span>
                     <span
                       style={{
                         ...styles.progressPercentage,

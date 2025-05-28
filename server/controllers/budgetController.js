@@ -4,14 +4,19 @@ const Transaction = require('../models/Transaction');
 const Group = require('../models/Group');
 
 class BudgetController {
-  // Create a new budget
   async createBudget(req, res) {
     const userId = req.user.userId;
-    const { groupId, category, amount, period, isCustomCategory, alertAt } =
-      req.body;
+    const {
+      groupId,
+      category,
+      amount,
+      period,
+      isCustomCategory,
+      alertAt,
+      isRepeating,
+    } = req.body;
 
     try {
-      // Verify user is in the group
       const group = await Group.findById(groupId);
       if (!group) {
         return res.status(404).json({ error: 'Group not found' });
@@ -21,7 +26,6 @@ class BudgetController {
         return res.status(403).json({ error: 'Not authorized for this group' });
       }
 
-      // Check if budget already exists for this category and group
       const existingBudget = await Budget.findOne({
         groupId,
         category,
@@ -35,7 +39,6 @@ class BudgetController {
         });
       }
 
-      // Create budget with explicit date calculation as fallback
       const budgetData = {
         groupId,
         category,
@@ -44,58 +47,23 @@ class BudgetController {
         isCustomCategory: isCustomCategory || false,
         createdBy: userId,
         alertAt: alertAt || 80,
-        startDate: new Date(), // Explicitly set startDate
+        isRepeating: isRepeating !== undefined ? isRepeating : true,
+        startDate: new Date(),
       };
-
-      console.log('Creating budget with data:', budgetData);
 
       const budget = new Budget(budgetData);
 
-      // Manual fallback if middleware doesn't work (shouldn't be needed with fixed middleware)
       if (!budget.currentPeriodStart || !budget.currentPeriodEnd) {
-        console.log('Middleware failed, manually calculating period dates...');
         const { start, end } = budget.calculatePeriodDates(budget.startDate);
         budget.currentPeriodStart = start;
         budget.currentPeriodEnd = end;
-        console.log('Manually set period dates:', { start, end });
       }
-
-      console.log('Budget before save:', {
-        period: budget.period,
-        startDate: budget.startDate,
-        currentPeriodStart: budget.currentPeriodStart,
-        currentPeriodEnd: budget.currentPeriodEnd,
-      });
-
       await budget.save();
       await budget.populate('createdBy', 'username email');
-
-      console.log('Budget saved successfully:', budget._id);
-
-      // ========== SOCKET.IO IMPLEMENTATION ==========
-      const io = req.app.get('io');
-      if (io) {
-        io.to(`group-${groupId}`).emit('budget-created', {
-          budget,
-          groupId,
-          timestamp: new Date().toISOString(),
-        });
-
-        io.to(`group-${groupId}`).emit('notification', {
-          id: Date.now(),
-          type: 'budget',
-          message: `${budget.createdBy.username} created a ${budget.period} budget for ${category}: $${amount}`,
-          groupId,
-          timestamp: new Date().toISOString(),
-        });
-      }
 
       res.status(201).json(budget);
     } catch (err) {
       console.error('Error creating budget:', err);
-      console.error('Error details:', err.message);
-      console.error('Validation errors:', err.errors);
-
       res.status(500).json({
         error: 'Failed to create budget',
         details: err.message,
@@ -103,13 +71,11 @@ class BudgetController {
     }
   }
 
-  // Get group budgets
   async getGroupBudgets(req, res) {
     const { groupId } = req.params;
     const userId = req.user.userId;
 
     try {
-      // Verify user is in the group
       const group = await Group.findById(groupId);
       if (!group) {
         return res.status(404).json({ error: 'Group not found' });
@@ -119,7 +85,6 @@ class BudgetController {
         return res.status(403).json({ error: 'Not authorized for this group' });
       }
 
-      // Get all active budgets for the group
       const budgets = await Budget.find({
         groupId,
         isActive: true,
@@ -127,12 +92,9 @@ class BudgetController {
         .populate('createdBy', 'username email')
         .sort({ createdAt: -1 });
 
-      // Calculate spending for all budgets efficiently
-      const budgetsWithSpending = await Budget.calculateSpendingForBudgets(
-        budgets
-      );
+      const result = await Budget.calculateSpendingForBudgets(budgets);
 
-      res.json(budgetsWithSpending);
+      res.json(result.budgets || result);
     } catch (err) {
       console.error('Error fetching budgets:', err);
       res.status(500).json({
@@ -142,13 +104,11 @@ class BudgetController {
     }
   }
 
-  // Get budget overview
   async getBudgetOverview(req, res) {
     const { groupId } = req.params;
     const userId = req.user.userId;
 
     try {
-      // Verify user is in the group
       const group = await Group.findById(groupId);
       if (!group) {
         return res.status(404).json({ error: 'Group not found' });
@@ -158,7 +118,6 @@ class BudgetController {
         return res.status(403).json({ error: 'Not authorized for this group' });
       }
 
-      // Get all active budgets for the group
       const budgets = await Budget.find({
         groupId,
         isActive: true,
@@ -174,12 +133,9 @@ class BudgetController {
         });
       }
 
-      // Calculate spending for all budgets
-      const budgetsWithSpending = await Budget.calculateSpendingForBudgets(
-        budgets
-      );
+      const result = await Budget.calculateSpendingForBudgets(budgets);
+      const budgetsWithSpending = result.budgets || result;
 
-      // Calculate overview statistics
       const overview = budgetsWithSpending.reduce(
         (acc, budget) => {
           acc.totalBudgeted += budget.amount;
@@ -197,7 +153,7 @@ class BudgetController {
           totalSpent: 0,
           totalRemaining: 0,
           alertCount: 0,
-          budgetCount: budgets.length,
+          budgetCount: budgetsWithSpending.length,
         }
       );
 
@@ -211,7 +167,6 @@ class BudgetController {
     }
   }
 
-  // Get individual budget by ID
   async getBudgetById(req, res) {
     const { budgetId } = req.params;
     const userId = req.user.userId;
@@ -225,14 +180,17 @@ class BudgetController {
         return res.status(404).json({ error: 'Budget not found' });
       }
 
-      // Check if user has access to this budget's group
       if (!budget.groupId.members.includes(userId)) {
         return res
           .status(403)
           .json({ error: 'Not authorized for this budget' });
       }
 
-      // Calculate spending for this budget
+      const updateResult = budget.updatePeriodIfNeeded();
+      if (updateResult.updated) {
+        await budget.save();
+      }
+
       const spending = await budget.calculateBudgetSpending();
 
       const budgetWithSpending = {
@@ -250,11 +208,10 @@ class BudgetController {
     }
   }
 
-  // Update a budget
   async updateBudget(req, res) {
     const { id } = req.params;
     const userId = req.user.userId;
-    const { amount, period, alertAt, isActive } = req.body;
+    const { amount, period, alertAt, isActive, isRepeating } = req.body;
 
     try {
       const budget = await Budget.findById(id).populate(
@@ -265,29 +222,18 @@ class BudgetController {
         return res.status(404).json({ error: 'Budget not found' });
       }
 
-      // Verify user is in the group
       const group = await Group.findById(budget.groupId);
       if (!group.members.includes(userId)) {
         return res.status(403).json({ error: 'Not authorized for this group' });
       }
 
-      // Update budget fields
       if (amount !== undefined) budget.amount = amount;
       if (period !== undefined) budget.period = period;
       if (alertAt !== undefined) budget.alertAt = alertAt;
       if (isActive !== undefined) budget.isActive = isActive;
+      if (isRepeating !== undefined) budget.isRepeating = isRepeating;
 
       await budget.save();
-
-      // ========== SOCKET.IO IMPLEMENTATION ==========
-      const io = req.app.get('io');
-      if (io) {
-        io.to(`group-${budget.groupId}`).emit('budget-updated', {
-          budget,
-          groupId: budget.groupId,
-          timestamp: new Date().toISOString(),
-        });
-      }
 
       res.json(budget);
     } catch (err) {
@@ -299,7 +245,6 @@ class BudgetController {
     }
   }
 
-  // Delete a budget
   async deleteBudget(req, res) {
     const { id } = req.params;
     const userId = req.user.userId;
@@ -313,24 +258,12 @@ class BudgetController {
         return res.status(404).json({ error: 'Budget not found' });
       }
 
-      // Verify user is in the group
       const group = await Group.findById(budget.groupId);
       if (!group.members.includes(userId)) {
         return res.status(403).json({ error: 'Not authorized for this group' });
       }
 
       await Budget.findByIdAndDelete(id);
-
-      // ========== SOCKET.IO IMPLEMENTATION ==========
-      const io = req.app.get('io');
-      if (io) {
-        io.to(`group-${budget.groupId}`).emit('budget-deleted', {
-          budgetId: id,
-          category: budget.category,
-          groupId: budget.groupId,
-          timestamp: new Date().toISOString(),
-        });
-      }
 
       res.json({ message: 'Budget deleted successfully' });
     } catch (err) {
@@ -342,13 +275,68 @@ class BudgetController {
     }
   }
 
-  // Get available categories (predefined + custom)
+  async toggleRepeating(req, res) {
+    const { id } = req.params;
+    const userId = req.user.userId;
+    const { isRepeating } = req.body;
+
+    try {
+      const budget = await Budget.findById(id).populate(
+        'createdBy',
+        'username email'
+      );
+      if (!budget) {
+        return res.status(404).json({ error: 'Budget not found' });
+      }
+
+      const group = await Group.findById(budget.groupId);
+      if (!group.members.includes(userId)) {
+        return res.status(403).json({ error: 'Not authorized for this group' });
+      }
+
+      budget.setRepeating(isRepeating);
+      await budget.save();
+
+      res.json({
+        message: `Budget repeating status updated to: ${
+          isRepeating ? 'enabled' : 'disabled'
+        }`,
+        budget: budget,
+      });
+    } catch (err) {
+      console.error('Error toggling budget repeating:', err);
+      res.status(500).json({
+        error: 'Failed to toggle budget repeating',
+        details: err.message,
+      });
+    }
+  }
+
+  async manualRollover(req, res) {
+    const userId = req.user.userId;
+
+    try {
+      const updatedCount =
+        await require('../services/budgetResetService').resetExpiredBudgets();
+
+      res.json({
+        message: `Manually updated ${updatedCount} budget periods`,
+        updatedCount,
+      });
+    } catch (err) {
+      console.error('Error in manual rollover:', err);
+      res.status(500).json({
+        error: 'Failed to perform manual rollover',
+        details: err.message,
+      });
+    }
+  }
+
   async getCategories(req, res) {
     const { groupId } = req.params;
     const userId = req.user.userId;
 
     try {
-      // Verify user is in the group
       const group = await Group.findById(groupId);
       if (!group) {
         return res.status(404).json({ error: 'Group not found' });
@@ -358,7 +346,6 @@ class BudgetController {
         return res.status(403).json({ error: 'Not authorized for this group' });
       }
 
-      // Predefined categories from Transaction schema
       const predefinedCategories = [
         'Rent/Mortgage',
         'Utilities',
@@ -372,7 +359,6 @@ class BudgetController {
         'Miscellaneous',
       ];
 
-      // Get custom categories from existing budgets
       const customBudgets = await Budget.find({
         groupId,
         isCustomCategory: true,

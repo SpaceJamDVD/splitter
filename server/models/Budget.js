@@ -26,6 +26,10 @@ const budgetSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isRepeating: {
+      type: Boolean,
+      default: true, // Most budgets should repeat by default
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -109,12 +113,54 @@ budgetSchema.methods.calculatePeriodDates = function (baseDate = new Date()) {
   return { start, end };
 };
 
-// Pre-save middleware to set period dates - FIXED VERSION
+// NEW: Enhanced method to update period with repeating logic
+budgetSchema.methods.updatePeriodIfNeeded = function () {
+  const now = new Date();
+
+  // Check if current period has ended
+  if (now > this.currentPeriodEnd) {
+    console.log(`Budget ${this._id} (${this.category}) period has ended`);
+
+    if (this.isRepeating) {
+      // Calculate new period dates starting from the day after the current period ended
+      const nextPeriodStart = new Date(this.currentPeriodEnd);
+      nextPeriodStart.setDate(nextPeriodStart.getDate() + 1);
+      nextPeriodStart.setHours(0, 0, 0, 0);
+
+      const { start, end } = this.calculatePeriodDates(nextPeriodStart);
+
+      this.currentPeriodStart = start;
+      this.currentPeriodEnd = end;
+
+      console.log(
+        `Updated repeating budget ${
+          this._id
+        } to new period: ${start.toDateString()} - ${end.toDateString()}`
+      );
+
+      return { updated: true, action: 'rolled_over' };
+    } else {
+      // Non-repeating budget - deactivate it
+      this.isActive = false;
+
+      console.log(
+        `Deactivated non-repeating budget ${this._id} (${this.category})`
+      );
+
+      return { updated: true, action: 'deactivated' };
+    }
+  }
+
+  return { updated: false, action: 'none' };
+};
+
+// Pre-save middleware to set period dates
 budgetSchema.pre('save', function (next) {
   console.log('Pre-save middleware triggered for budget');
   console.log('isNew:', this.isNew);
   console.log('period:', this.period);
   console.log('startDate:', this.startDate);
+  console.log('isRepeating:', this.isRepeating);
 
   // Always calculate period dates for new documents or when period/startDate changes
   if (this.isNew || this.isModified('period') || this.isModified('startDate')) {
@@ -232,14 +278,53 @@ budgetSchema.methods.calculateBudgetSpending = async function () {
   }
 };
 
-// Static method to calculate spending for multiple budgets efficiently
+// ENHANCED: Static method with automatic rollover for repeating budgets
 budgetSchema.statics.calculateSpendingForBudgets = async function (budgets) {
   try {
     const Transaction = require('./Transaction');
 
-    // Get all unique group IDs and categories
-    const groupIds = [...new Set(budgets.map((b) => b.groupId.toString()))];
-    const categories = [...new Set(budgets.map((b) => b.category))];
+    // First, check and update periods for all budgets that need it
+    const budgetsToUpdate = [];
+    const updateResults = [];
+
+    for (const budget of budgets) {
+      const result = budget.updatePeriodIfNeeded();
+      if (result.updated) {
+        budgetsToUpdate.push(budget);
+        updateResults.push({
+          budgetId: budget._id,
+          category: budget.category,
+          action: result.action,
+          newPeriodStart: budget.currentPeriodStart,
+          newPeriodEnd: budget.currentPeriodEnd,
+          isRepeating: budget.isRepeating,
+        });
+      }
+    }
+
+    // Save any budgets that had their periods updated
+    if (budgetsToUpdate.length > 0) {
+      await Promise.all(budgetsToUpdate.map((budget) => budget.save()));
+      console.log(`Updated ${budgetsToUpdate.length} budget periods:`);
+      updateResults.forEach((result) => {
+        if (result.action === 'rolled_over') {
+          console.log(`  - Rolled over repeating budget: ${result.category}`);
+        } else if (result.action === 'deactivated') {
+          console.log(
+            `  - Deactivated non-repeating budget: ${result.category}`
+          );
+        }
+      });
+    }
+
+    // Filter out deactivated budgets for spending calculation
+    const activeBudgets = budgets.filter((budget) => budget.isActive);
+
+    // Get all unique group IDs and categories for active budgets
+    const groupIds = [
+      ...new Set(activeBudgets.map((b) => b.groupId.toString())),
+    ];
+    const categories = [...new Set(activeBudgets.map((b) => b.category))];
 
     // Find all relevant transactions in one query
     const allTransactions = await Transaction.find({
@@ -248,53 +333,79 @@ budgetSchema.statics.calculateSpendingForBudgets = async function (budgets) {
       isSettlement: { $ne: true },
     });
 
-    // Calculate spending for each budget
-    const budgetsWithSpending = await Promise.all(
-      budgets.map(async (budget) => {
-        // Filter transactions for this specific budget's period and category
-        const budgetTransactions = allTransactions.filter(
-          (tx) =>
-            tx.groupId.toString() === budget.groupId.toString() &&
-            tx.category === budget.category &&
-            tx.date >= budget.currentPeriodStart &&
-            tx.date <= budget.currentPeriodEnd
-        );
+    // Calculate spending for each active budget
+    const budgetsWithSpending = activeBudgets.map((budget) => {
+      // Filter transactions for this specific budget's current period and category
+      const budgetTransactions = allTransactions.filter(
+        (tx) =>
+          tx.groupId.toString() === budget.groupId.toString() &&
+          tx.category === budget.category &&
+          tx.date >= budget.currentPeriodStart &&
+          tx.date <= budget.currentPeriodEnd
+      );
 
-        const currentSpending = budgetTransactions.reduce(
-          (total, tx) => total + tx.amount,
-          0
-        );
-        const remainingAmount = budget.amount - currentSpending;
-        const percentageUsed =
-          budget.amount > 0 ? (currentSpending / budget.amount) * 100 : 0;
-        const shouldAlert = percentageUsed >= budget.alertAt;
-        const isOverBudget = currentSpending > budget.amount;
+      const currentSpending = budgetTransactions.reduce(
+        (total, tx) => total + tx.amount,
+        0
+      );
+      const remainingAmount = budget.amount - currentSpending;
+      const percentageUsed =
+        budget.amount > 0 ? (currentSpending / budget.amount) * 100 : 0;
+      const shouldAlert = percentageUsed >= budget.alertAt;
+      const isOverBudget = currentSpending > budget.amount;
 
-        return {
-          ...budget.toObject(),
-          currentSpending,
-          remainingAmount,
-          percentageUsed,
-          shouldAlert,
-          isOverBudget,
-          transactionCount: budgetTransactions.length,
-        };
-      })
-    );
+      return {
+        ...budget.toObject(),
+        currentSpending,
+        remainingAmount,
+        percentageUsed,
+        shouldAlert,
+        isOverBudget,
+        transactionCount: budgetTransactions.length,
+        // Include rollover info for frontend
+        wasRolledOver: updateResults.some(
+          (r) =>
+            r.budgetId.toString() === budget._id.toString() &&
+            r.action === 'rolled_over'
+        ),
+      };
+    });
 
-    return budgetsWithSpending;
+    return {
+      budgets: budgetsWithSpending,
+      updateResults, // Include update results for notifications/logging
+    };
   } catch (error) {
     console.error('Error calculating spending for budgets:', error);
-    return budgets.map((budget) => ({
-      ...budget.toObject(),
-      currentSpending: 0,
-      remainingAmount: budget.amount,
-      percentageUsed: 0,
-      shouldAlert: false,
-      isOverBudget: false,
-      transactionCount: 0,
-    }));
+    return {
+      budgets: budgets.map((budget) => ({
+        ...budget.toObject(),
+        currentSpending: 0,
+        remainingAmount: budget.amount,
+        percentageUsed: 0,
+        shouldAlert: false,
+        isOverBudget: false,
+        transactionCount: 0,
+        wasRolledOver: false,
+      })),
+      updateResults: [],
+    };
   }
+};
+
+//Method to manually toggle repeating status
+budgetSchema.methods.setRepeating = function (isRepeating) {
+  this.isRepeating = isRepeating;
+};
+
+// Static method to get expired non-repeating budgets (for cleanup)
+budgetSchema.statics.getExpiredNonRepeatingBudgets = async function () {
+  const now = new Date();
+  return await this.find({
+    isActive: true,
+    isRepeating: false,
+    currentPeriodEnd: { $lt: now },
+  });
 };
 
 module.exports = mongoose.model('Budget', budgetSchema);

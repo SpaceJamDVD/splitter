@@ -23,4 +23,10 @@ router.put('/:id', budgetController.updateBudget);
 // Delete a budget
 router.delete('/:id', budgetController.deleteBudget);
 
+// Toggle repeating status
+router.patch('/:id/repeating', budgetController.toggleRepeating);
+
+// Manual rollover (admin only)
+router.post('/rollover', budgetController.manualRollover);
+
 module.exports = router;

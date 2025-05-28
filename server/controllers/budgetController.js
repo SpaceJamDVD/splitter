@@ -63,7 +63,6 @@ class BudgetController {
 
       res.status(201).json(budget);
     } catch (err) {
-      console.error('Error creating budget:', err);
       res.status(500).json({
         error: 'Failed to create budget',
         details: err.message,
@@ -96,7 +95,6 @@ class BudgetController {
 
       res.json(result.budgets || result);
     } catch (err) {
-      console.error('Error fetching budgets:', err);
       res.status(500).json({
         error: 'Failed to fetch budgets',
         details: err.message,
@@ -159,7 +157,6 @@ class BudgetController {
 
       res.json(overview);
     } catch (err) {
-      console.error('Error fetching budget overview:', err);
       res.status(500).json({
         error: 'Failed to fetch budget overview',
         details: err.message,
@@ -200,7 +197,6 @@ class BudgetController {
 
       res.json(budgetWithSpending);
     } catch (err) {
-      console.error('Error fetching budget:', err);
       res.status(500).json({
         error: 'Failed to fetch budget',
         details: err.message,
@@ -237,7 +233,6 @@ class BudgetController {
 
       res.json(budget);
     } catch (err) {
-      console.error('Error updating budget:', err);
       res.status(500).json({
         error: 'Failed to update budget',
         details: err.message,
@@ -267,7 +262,6 @@ class BudgetController {
 
       res.json({ message: 'Budget deleted successfully' });
     } catch (err) {
-      console.error('Error deleting budget:', err);
       res.status(500).json({
         error: 'Failed to delete budget',
         details: err.message,
@@ -304,7 +298,6 @@ class BudgetController {
         budget: budget,
       });
     } catch (err) {
-      console.error('Error toggling budget repeating:', err);
       res.status(500).json({
         error: 'Failed to toggle budget repeating',
         details: err.message,
@@ -324,7 +317,6 @@ class BudgetController {
         updatedCount,
       });
     } catch (err) {
-      console.error('Error in manual rollover:', err);
       res.status(500).json({
         error: 'Failed to perform manual rollover',
         details: err.message,
@@ -371,7 +363,6 @@ class BudgetController {
         all: [...predefinedCategories, ...customBudgets],
       });
     } catch (err) {
-      console.error('Error fetching categories:', err);
       res.status(500).json({
         error: 'Failed to fetch categories',
         details: err.message,
@@ -379,7 +370,6 @@ class BudgetController {
     }
   }
 
-  // Check budget impact and emit alerts if thresholds exceeded
   async checkBudgetImpactForTransaction(
     groupId,
     category,
@@ -390,7 +380,6 @@ class BudgetController {
     try {
       if (!category) return null;
 
-      // Find active budget for this category
       const budget = await Budget.findOne({
         groupId,
         category,
@@ -398,24 +387,32 @@ class BudgetController {
       });
 
       if (!budget) {
-        console.log(`No budget found for category: ${category}`);
         return null;
       }
 
-      // Calculate current spending
       const spending = await budget.calculateBudgetSpending();
-      const newTotal = spending.currentSpending + amount;
+
+      const spendingBefore = {
+        currentSpending: spending.currentSpending - amount,
+        shouldAlert: false,
+        isOverBudget: false,
+      };
+
+      const percentageBefore =
+        (spendingBefore.currentSpending / budget.amount) * 100;
+      spendingBefore.shouldAlert = percentageBefore >= budget.alertAt;
+      spendingBefore.isOverBudget =
+        spendingBefore.currentSpending > budget.amount;
+
+      const newTotal = spending.currentSpending;
       const newPercentage = (newTotal / budget.amount) * 100;
 
-      // Check if we need to alert
-      const wasUnderAlert = !spending.shouldAlert;
-      const wasUnderBudget = !spending.isOverBudget;
+      const wasUnderAlert = !spendingBefore.shouldAlert;
+      const wasUnderBudget = !spendingBefore.isOverBudget;
       const wouldTriggerAlert = newPercentage >= budget.alertAt;
       const wouldExceedBudget = newTotal > budget.amount;
 
-      // Emit alerts for threshold breaches
       if (io) {
-        // Alert threshold reached for first time
         if (wasUnderAlert && wouldTriggerAlert && !wouldExceedBudget) {
           io.to(`group-${groupId}`).emit('budget-alert', {
             type: 'threshold_reached',
@@ -431,7 +428,7 @@ class BudgetController {
               paidBy: transaction.paidBy,
             },
             spending: {
-              previous: spending.currentSpending,
+              previous: spendingBefore.currentSpending,
               new: newTotal,
               percentage: newPercentage,
             },
@@ -441,12 +438,8 @@ class BudgetController {
             groupId,
             timestamp: new Date().toISOString(),
           });
-          console.log(
-            `Budget alert: ${category} reached ${newPercentage.toFixed(1)}%`
-          );
         }
 
-        // Budget exceeded for first time
         if (wasUnderBudget && wouldExceedBudget) {
           const overAmount = newTotal - budget.amount;
           io.to(`group-${groupId}`).emit('budget-alert', {
@@ -463,7 +456,7 @@ class BudgetController {
               paidBy: transaction.paidBy,
             },
             spending: {
-              previous: spending.currentSpending,
+              previous: spendingBefore.currentSpending,
               new: newTotal,
               percentage: newPercentage,
               overAmount: overAmount,
@@ -472,9 +465,6 @@ class BudgetController {
             groupId,
             timestamp: new Date().toISOString(),
           });
-          console.log(
-            `Budget exceeded: ${category} over by $${overAmount.toFixed(2)}`
-          );
         }
       }
 
@@ -486,7 +476,6 @@ class BudgetController {
         newPercentage: newPercentage,
       };
     } catch (error) {
-      console.error('Error checking budget impact:', error);
       return null;
     }
   }

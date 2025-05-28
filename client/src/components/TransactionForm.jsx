@@ -29,7 +29,7 @@ const TransactionForm = ({ groupId, onClose }) => {
         notes,
       });
       setMessage('✅ Transaction added');
-      setTimeout(() => onClose(), 1000);
+      onClose();
     } catch (err) {
       console.error(err);
       setMessage('❌ Failed to add transaction');

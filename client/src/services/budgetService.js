@@ -3,7 +3,6 @@ import API from '../api';
 
 export const createBudget = async (budgetData) => {
   try {
-    console.log('Creating budget with data:', budgetData);
     const response = await API.post('/budgets', budgetData);
     return response.data;
   } catch (error) {

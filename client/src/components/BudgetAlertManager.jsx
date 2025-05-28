@@ -24,8 +24,6 @@ const BudgetAlertManager = ({ groupId }) => {
     };
 
     const handleBudgetAlert = (alertData) => {
-      console.log('Received budget alert:', alertData);
-
       // Only show alerts for this group
       if (alertData.groupId !== groupId) return;
 

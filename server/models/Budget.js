@@ -119,8 +119,6 @@ budgetSchema.methods.updatePeriodIfNeeded = function () {
 
   // Check if current period has ended
   if (now > this.currentPeriodEnd) {
-    console.log(`Budget ${this._id} (${this.category}) period has ended`);
-
     if (this.isRepeating) {
       // Calculate new period dates starting from the day after the current period ended
       const nextPeriodStart = new Date(this.currentPeriodEnd);
@@ -132,20 +130,10 @@ budgetSchema.methods.updatePeriodIfNeeded = function () {
       this.currentPeriodStart = start;
       this.currentPeriodEnd = end;
 
-      console.log(
-        `Updated repeating budget ${
-          this._id
-        } to new period: ${start.toDateString()} - ${end.toDateString()}`
-      );
-
       return { updated: true, action: 'rolled_over' };
     } else {
       // Non-repeating budget - deactivate it
       this.isActive = false;
-
-      console.log(
-        `Deactivated non-repeating budget ${this._id} (${this.category})`
-      );
 
       return { updated: true, action: 'deactivated' };
     }
@@ -156,30 +144,15 @@ budgetSchema.methods.updatePeriodIfNeeded = function () {
 
 // Pre-save middleware to set period dates
 budgetSchema.pre('save', function (next) {
-  console.log('Pre-save middleware triggered for budget');
-  console.log('isNew:', this.isNew);
-  console.log('period:', this.period);
-  console.log('startDate:', this.startDate);
-  console.log('isRepeating:', this.isRepeating);
-
   // Always calculate period dates for new documents or when period/startDate changes
   if (this.isNew || this.isModified('period') || this.isModified('startDate')) {
     try {
       const baseDate = this.startDate || new Date();
-      console.log('Calculating period dates with base date:', baseDate);
-
       const { start, end } = this.calculatePeriodDates(baseDate);
-
-      console.log('Calculated period start:', start);
-      console.log('Calculated period end:', end);
 
       this.currentPeriodStart = start;
       this.currentPeriodEnd = end;
-
-      console.log('Set currentPeriodStart:', this.currentPeriodStart);
-      console.log('Set currentPeriodEnd:', this.currentPeriodEnd);
     } catch (error) {
-      console.error('Error in pre-save middleware:', error);
       return next(error);
     }
   }
@@ -189,25 +162,15 @@ budgetSchema.pre('save', function (next) {
 
 // Alternative: Pre-validate middleware as backup
 budgetSchema.pre('validate', function (next) {
-  console.log('Pre-validate middleware triggered');
-
   // Ensure period dates are set before validation
   if (!this.currentPeriodStart || !this.currentPeriodEnd) {
-    console.log('Period dates missing, calculating...');
     try {
       const baseDate = this.startDate || new Date();
       const { start, end } = this.calculatePeriodDates(baseDate);
 
       this.currentPeriodStart = start;
       this.currentPeriodEnd = end;
-
-      console.log(
-        'Set in validate - currentPeriodStart:',
-        this.currentPeriodStart
-      );
-      console.log('Set in validate - currentPeriodEnd:', this.currentPeriodEnd);
     } catch (error) {
-      console.error('Error in pre-validate middleware:', error);
       return next(error);
     }
   }
@@ -215,45 +178,46 @@ budgetSchema.pre('validate', function (next) {
   next();
 });
 
-// Method to calculate budget spending for the current period
+// Replace your calculateBudgetSpending method with this enhanced debug version:
+
 budgetSchema.methods.calculateBudgetSpending = async function () {
   try {
-    // Import Transaction model (make sure this path is correct for your project)
     const Transaction = require('./Transaction');
 
-    // Find all transactions for this group and category within the current period
-    const transactions = await Transaction.find({
+    // Get dates for comparison
+    const budgetCreationDate = this.createdAt || this.startDate;
+    const effectiveStartDate =
+      this.currentPeriodStart > budgetCreationDate
+        ? this.currentPeriodStart
+        : budgetCreationDate;
+
+    // First, find ALL transactions for this category to see what we're working with
+    const allTransactions = await Transaction.find({
+      groupId: this.groupId,
+      category: this.category,
+      isSettlement: { $ne: true },
+    }).sort({ date: 1 });
+
+    // Now find the transactions that should actually count
+    const countedTransactions = await Transaction.find({
       groupId: this.groupId,
       category: this.category,
       date: {
-        $gte: this.currentPeriodStart,
+        $gte: effectiveStartDate,
         $lte: this.currentPeriodEnd,
       },
-      // Exclude settlement transactions
       isSettlement: { $ne: true },
-    });
+    }).sort({ date: 1 });
 
-    // Calculate total spending
-    const currentSpending = transactions.reduce(
+    const currentSpending = countedTransactions.reduce(
       (total, tx) => total + tx.amount,
       0
     );
-
-    // Calculate remaining amount
     const remainingAmount = this.amount - currentSpending;
-
-    // Calculate percentage used
     const percentageUsed =
       this.amount > 0 ? (currentSpending / this.amount) * 100 : 0;
-
-    // Check if should alert (spending >= alertAt percentage)
     const shouldAlert = percentageUsed >= this.alertAt;
-
-    // Check if over budget
     const isOverBudget = currentSpending > this.amount;
-
-    // Transaction count
-    const transactionCount = transactions.length;
 
     return {
       currentSpending,
@@ -261,11 +225,10 @@ budgetSchema.methods.calculateBudgetSpending = async function () {
       percentageUsed,
       shouldAlert,
       isOverBudget,
-      transactionCount,
-      transactions: transactions || [],
+      transactionCount: countedTransactions.length,
+      transactions: countedTransactions || [],
     };
   } catch (error) {
-    console.error('Error calculating budget spending:', error);
     return {
       currentSpending: 0,
       remainingAmount: this.amount,
@@ -278,7 +241,7 @@ budgetSchema.methods.calculateBudgetSpending = async function () {
   }
 };
 
-// ENHANCED: Static method with automatic rollover for repeating budgets
+// FIXED: Static method moved outside of instance method
 budgetSchema.statics.calculateSpendingForBudgets = async function (budgets) {
   try {
     const Transaction = require('./Transaction');
@@ -305,16 +268,6 @@ budgetSchema.statics.calculateSpendingForBudgets = async function (budgets) {
     // Save any budgets that had their periods updated
     if (budgetsToUpdate.length > 0) {
       await Promise.all(budgetsToUpdate.map((budget) => budget.save()));
-      console.log(`Updated ${budgetsToUpdate.length} budget periods:`);
-      updateResults.forEach((result) => {
-        if (result.action === 'rolled_over') {
-          console.log(`  - Rolled over repeating budget: ${result.category}`);
-        } else if (result.action === 'deactivated') {
-          console.log(
-            `  - Deactivated non-repeating budget: ${result.category}`
-          );
-        }
-      });
     }
 
     // Filter out deactivated budgets for spending calculation
@@ -335,12 +288,19 @@ budgetSchema.statics.calculateSpendingForBudgets = async function (budgets) {
 
     // Calculate spending for each active budget
     const budgetsWithSpending = activeBudgets.map((budget) => {
-      // Filter transactions for this specific budget's current period and category
+      // Calculate effective start date for each budget
+      const budgetCreationDate = budget.createdAt || budget.startDate;
+      const effectiveStartDate =
+        budget.currentPeriodStart > budgetCreationDate
+          ? budget.currentPeriodStart
+          : budgetCreationDate;
+
+      // Filter transactions for this specific budget's effective period and category
       const budgetTransactions = allTransactions.filter(
         (tx) =>
           tx.groupId.toString() === budget.groupId.toString() &&
           tx.category === budget.category &&
-          tx.date >= budget.currentPeriodStart &&
+          tx.date >= effectiveStartDate && // ← Use effectiveStartDate
           tx.date <= budget.currentPeriodEnd
       );
 
@@ -362,7 +322,6 @@ budgetSchema.statics.calculateSpendingForBudgets = async function (budgets) {
         shouldAlert,
         isOverBudget,
         transactionCount: budgetTransactions.length,
-        // Include rollover info for frontend
         wasRolledOver: updateResults.some(
           (r) =>
             r.budgetId.toString() === budget._id.toString() &&
@@ -373,10 +332,9 @@ budgetSchema.statics.calculateSpendingForBudgets = async function (budgets) {
 
     return {
       budgets: budgetsWithSpending,
-      updateResults, // Include update results for notifications/logging
+      updateResults,
     };
   } catch (error) {
-    console.error('Error calculating spending for budgets:', error);
     return {
       budgets: budgets.map((budget) => ({
         ...budget.toObject(),

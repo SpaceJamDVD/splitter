@@ -102,8 +102,6 @@ class TransactionController {
       }
 
       if (io) {
-        console.log(`Emitting transaction-update to group-${groupId}`);
-
         // Emit transaction creation event to all users in the group room
         io.to(`group-${groupId}`).emit('transaction-update', {
           type: 'created',
@@ -123,21 +121,15 @@ class TransactionController {
             balances: updatedBalances,
             timestamp: new Date().toISOString(),
           });
-
-          console.log(`Emitted balance-update to group-${groupId}`);
         } catch (balanceError) {
           console.error('Failed to emit balance update:', balanceError);
         }
-      } else {
-        console.warn('Socket.IO instance not found on app');
       }
 
       // ===============================================
 
       res.status(201).json(populatedTransaction);
     } catch (err) {
-      console.error('Error creating transaction:', err);
-
       if (err.name === 'ValidationError') {
         return res.status(400).json({
           error: 'Validation error',
@@ -183,7 +175,6 @@ class TransactionController {
 
       res.json(transactions);
     } catch (err) {
-      console.error('Error fetching group transactions:', err);
       res.status(500).json({
         error: 'Failed to fetch transactions',
         details: err.message,
@@ -220,10 +211,6 @@ class TransactionController {
 
       const io = req.app.get('io');
       if (io) {
-        console.log(
-          `Emitting transaction-update (updated) to group-${transaction.groupId}`
-        );
-
         io.to(`group-${transaction.groupId}`).emit('transaction-update', {
           type: 'updated',
           transaction: updatedTransaction,
@@ -247,7 +234,6 @@ class TransactionController {
 
       res.json(updatedTransaction);
     } catch (err) {
-      console.error('Error updating transaction:', err);
       res.status(500).json({
         error: 'Failed to update transaction',
         details: err.message,
@@ -287,10 +273,6 @@ class TransactionController {
 
       const io = req.app.get('io');
       if (io) {
-        console.log(
-          `Emitting transaction-update (deleted) to group-${groupId}`
-        );
-
         io.to(`group-${groupId}`).emit('transaction-update', {
           type: 'deleted',
           transactionId: id,
@@ -332,7 +314,6 @@ class TransactionController {
 
       res.json({ message: 'Transaction deleted successfully' });
     } catch (err) {
-      console.error('Error deleting transaction:', err);
       res.status(500).json({
         error: 'Failed to delete transaction',
         details: err.message,
@@ -463,8 +444,6 @@ class TransactionController {
         // Get the user who settled up
         const user = await User.findById(userId).select('username email');
 
-        console.log(`Emitting group-settled to group-${groupId}`);
-
         // Emit settlement event
         io.to(`group-${groupId}`).emit('group-settled', {
           groupId: groupId,
@@ -501,7 +480,6 @@ class TransactionController {
 
       res.json({ message: 'Group expenses settled successfully' });
     } catch (err) {
-      console.error('Error settling up:', err);
       res.status(500).json({
         error: 'Failed to settle up',
         details: err.message,
@@ -563,7 +541,6 @@ class TransactionController {
         }
       }
     } catch (err) {
-      console.error('Error recalculating balances:', err);
       throw err;
     }
   }
@@ -613,7 +590,6 @@ class TransactionController {
         transactionCount: transactionsToSum.length,
       });
     } catch (err) {
-      console.error('Error fetching recent total:', err);
       res.status(500).json({
         error: 'Failed to fetch recent total',
         details: err.message,

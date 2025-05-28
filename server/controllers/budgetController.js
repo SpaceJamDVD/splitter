@@ -378,6 +378,118 @@ class BudgetController {
       });
     }
   }
+
+  // Check budget impact and emit alerts if thresholds exceeded
+  async checkBudgetImpactForTransaction(
+    groupId,
+    category,
+    amount,
+    transaction,
+    io
+  ) {
+    try {
+      if (!category) return null;
+
+      // Find active budget for this category
+      const budget = await Budget.findOne({
+        groupId,
+        category,
+        isActive: true,
+      });
+
+      if (!budget) {
+        console.log(`No budget found for category: ${category}`);
+        return null;
+      }
+
+      // Calculate current spending
+      const spending = await budget.calculateBudgetSpending();
+      const newTotal = spending.currentSpending + amount;
+      const newPercentage = (newTotal / budget.amount) * 100;
+
+      // Check if we need to alert
+      const wasUnderAlert = !spending.shouldAlert;
+      const wasUnderBudget = !spending.isOverBudget;
+      const wouldTriggerAlert = newPercentage >= budget.alertAt;
+      const wouldExceedBudget = newTotal > budget.amount;
+
+      // Emit alerts for threshold breaches
+      if (io) {
+        // Alert threshold reached for first time
+        if (wasUnderAlert && wouldTriggerAlert && !wouldExceedBudget) {
+          io.to(`group-${groupId}`).emit('budget-alert', {
+            type: 'threshold_reached',
+            severity: 'warning',
+            budget: {
+              category: budget.category,
+              amount: budget.amount,
+              alertAt: budget.alertAt,
+            },
+            transaction: {
+              amount: transaction.amount,
+              description: transaction.description,
+              paidBy: transaction.paidBy,
+            },
+            spending: {
+              previous: spending.currentSpending,
+              new: newTotal,
+              percentage: newPercentage,
+            },
+            message: `${category} spending has reached ${newPercentage.toFixed(
+              1
+            )}% of budget`,
+            groupId,
+            timestamp: new Date().toISOString(),
+          });
+          console.log(
+            `Budget alert: ${category} reached ${newPercentage.toFixed(1)}%`
+          );
+        }
+
+        // Budget exceeded for first time
+        if (wasUnderBudget && wouldExceedBudget) {
+          const overAmount = newTotal - budget.amount;
+          io.to(`group-${groupId}`).emit('budget-alert', {
+            type: 'budget_exceeded',
+            severity: 'critical',
+            budget: {
+              category: budget.category,
+              amount: budget.amount,
+              alertAt: budget.alertAt,
+            },
+            transaction: {
+              amount: transaction.amount,
+              description: transaction.description,
+              paidBy: transaction.paidBy,
+            },
+            spending: {
+              previous: spending.currentSpending,
+              new: newTotal,
+              percentage: newPercentage,
+              overAmount: overAmount,
+            },
+            message: `${category} budget exceeded by $${overAmount.toFixed(2)}`,
+            groupId,
+            timestamp: new Date().toISOString(),
+          });
+          console.log(
+            `Budget exceeded: ${category} over by $${overAmount.toFixed(2)}`
+          );
+        }
+      }
+
+      return {
+        budgetFound: true,
+        alertTriggered:
+          (wasUnderAlert && wouldTriggerAlert) ||
+          (wasUnderBudget && wouldExceedBudget),
+        newPercentage: newPercentage,
+      };
+    } catch (error) {
+      console.error('Error checking budget impact:', error);
+      return null;
+    }
+  }
 }
 
 module.exports = new BudgetController();

@@ -6,7 +6,8 @@ import {
 } from '../services/transactionService';
 import { getBalancesForGroup } from '../services/memberBalanceService';
 import { AuthContext } from '../contexts/AuthContext';
-import socketService from '../services/socketService'; // Import your socket service
+import socketService from '../services/socketService';
+import BudgetAlertManager from './BudgetAlertManager'; // Import the alert manager
 import {
   DollarSign,
   Calendar,
@@ -19,7 +20,7 @@ import {
 } from 'lucide-react';
 
 const TransactionList = ({ groupId, members: allGroupMembers }) => {
-  const { user, token } = useContext(AuthContext); // Make sure you have token in AuthContext
+  const { user, token } = useContext(AuthContext);
   const [transactions, setTransactions] = useState([]);
   const [memberBalances, setMemberBalances] = useState([]);
   const [error, setError] = useState('');
@@ -89,6 +90,9 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
             }
             return [data.transaction, ...prev];
           });
+
+          // Update recent totals when new transaction is created
+          fetchRecentTotal();
           break;
 
         case 'updated':
@@ -103,6 +107,9 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
           setTransactions((prev) => {
             return prev.filter((t) => t._id !== data.transactionId);
           });
+
+          // Update recent totals when transaction is deleted
+          fetchRecentTotal();
           break;
 
         default:
@@ -136,6 +143,17 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
       socketService.off('group-settled', handleGroupSettled);
     };
   }, [isSocketConnected, groupId]);
+
+  // Helper function to fetch recent total
+  const fetchRecentTotal = async () => {
+    try {
+      const recentTotalData = await getRecentTotal(groupId);
+      setRecentTotal(recentTotalData.totalAmount);
+      setRecentSumTransactions(recentTotalData.transactionCount);
+    } catch (err) {
+      console.error('Failed to fetch recent total:', err);
+    }
+  };
 
   // Helper function to fetch balances
   const fetchBalances = async () => {
@@ -211,7 +229,6 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
   const handleSettleUp = async () => {
     try {
       await settleUp(groupId);
-
       alert('Settled up successfully!');
     } catch (err) {
       alert(
@@ -605,368 +622,413 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
   }
 
   return (
-    <div style={styles.container}>
-      {/* Header Section with Connection Status */}
-      <div style={styles.header}>
-        <h1 style={styles.title}>Expense Tracker</h1>
-        <p style={styles.subtitle}>Track and manage your shared expenses</p>
-      </div>
+    <>
+      {/* Add BudgetAlertManager component */}
+      <BudgetAlertManager groupId={groupId} />
 
-      {/* Balance Overview Card */}
-      <div style={styles.balanceCard}>
-        <div style={styles.balanceHeader}>
-          <h2 style={styles.balanceTitle}>
-            <TrendingUp size={20} color="#2563eb" />
-            Balance Overview
-          </h2>
-          <button
-            style={styles.settleButton}
-            onClick={handleSettleUp}
-            onMouseEnter={(e) => {
-              e.target.style.transform = 'scale(1.05)';
-              e.target.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.transform = 'scale(1)';
-              e.target.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+      <div style={styles.container}>
+        {/* Header Section with Connection Status */}
+        <div style={styles.header}>
+          <h1 style={styles.title}>Expense Tracker</h1>
+          <p style={styles.subtitle}>Track and manage your shared expenses</p>
+          <div
+            style={{
+              ...styles.connectionStatus,
+              ...(isSocketConnected ? styles.connected : styles.disconnected),
             }}
           >
-            Settle Up
-          </button>
-        </div>
-
-        <div style={styles.balanceGrid}>
-          {/* My Balance */}
-          <div style={styles.myBalanceCard}>
-            <div style={styles.balanceInfo}>
-              <div
-                style={{
-                  ...styles.balanceIcon,
-                  backgroundColor:
-                    myBalance > 0
-                      ? '#dcfce7'
-                      : myBalance < 0
-                      ? '#fee2e2'
-                      : '#f3f4f6',
-                }}
-              >
-                {myBalance > 0 ? (
-                  <TrendingUp size={20} color="#16a34a" />
-                ) : myBalance < 0 ? (
-                  <TrendingDown size={20} color="#dc2626" />
-                ) : (
-                  <CheckCircle size={20} color="#6b7280" />
-                )}
-              </div>
-              <div>
-                <h3 style={styles.balanceLabel}>Your Balance</h3>
-                <p
-                  style={{
-                    ...styles.balanceAmount,
-                    color:
-                      myBalance > 0
-                        ? '#16a34a'
-                        : myBalance < 0
-                        ? '#dc2626'
-                        : '#6b7280',
-                  }}
-                >
-                  {formatCurrency(Math.abs(myBalance))}
-                </p>
-              </div>
-            </div>
-
-            {myBalance > 0 && (
-              <div
-                style={{
-                  ...styles.balanceDetail,
-                  color: '#166534',
-                  backgroundColor: '#f0fdf4',
-                }}
-              >
-                <p style={{ fontWeight: '500', margin: '0 0 4px 0' }}>
-                  You spent more
-                </p>
-                <p style={{ margin: 0 }}>
-                  {Object.entries(balances)
-                    .filter(
-                      ([userId, bal]) => bal < 0 && userId !== user?.userId
-                    )
-                    .map(([userId, bal]) => {
-                      const username = getUsername(userId);
-                      const amountOwed = Math.abs(bal);
-                      return `${username} owes you ${formatCurrency(
-                        amountOwed
-                      )}`;
-                    })
-                    .join(', ') || 'from various members'}
-                </p>
-              </div>
-            )}
-
-            {myBalance < 0 && (
-              <div
-                style={{
-                  ...styles.balanceDetail,
-                  color: '#991b1b',
-                  backgroundColor: '#fef2f2',
-                }}
-              >
-                <p style={{ fontWeight: '500', margin: '0 0 4px 0' }}>
-                  You spent less
-                </p>
-                <p style={{ margin: 0 }}>
-                  {Object.entries(balances)
-                    .filter(
-                      ([userId, bal]) => bal > 0 && userId !== user?.userId
-                    )
-                    .map(([userId, bal]) => {
-                      const username = getUsername(userId);
-                      const amountToPay = Math.abs(bal);
-                      return `You owe ${username} ${formatCurrency(
-                        amountToPay
-                      )}`;
-                    })
-                    .join(', ') || 'to various members'}
-                </p>
-              </div>
-            )}
-
-            {myBalance === 0 && transactions.length > 0 && (
-              <div
-                style={{
-                  ...styles.balanceDetail,
-                  color: '#6b7280',
-                  backgroundColor: '#f9fafb',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <CheckCircle size={16} color="#16a34a" />
-                <span>You're all settled up!</span>
-              </div>
-            )}
-          </div>
-
-          {/* Quick Stats */}
-          <div style={styles.statsGrid}>
-            <div style={{ ...styles.statCard, ...styles.statCardPurple }}>
-              <div>
-                <p style={styles.statLabel}>
-                  Total Expense Since Last Settlement
-                </p>
-                <p style={{ ...styles.statValue, color: '#7c3aed' }}>
-                  {formatCurrency(recentTotal)}
-                </p>
-              </div>
-              <DollarSign size={32} color="#a855f7" />
-            </div>
-            <div style={{ ...styles.statCard, ...styles.statCardOrange }}>
-              <div>
-                <p style={styles.statLabel}>
-                  Amount of transactions since last settlement
-                </p>
-                <p style={{ ...styles.statValue, color: '#ea580c' }}>
-                  {recentSumTransactions}
-                </p>
-              </div>
-              <FileText size={32} color="#fb923c" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Transactions Table */}
-      <div style={styles.transactionsCard}>
-        <div style={styles.transactionsHeader}>
-          <h2 style={styles.transactionsTitle}>
-            <CreditCard size={20} color="#6b7280" />
-            Recent Transactions
-          </h2>
-        </div>
-
-        {error && (
-          <div style={styles.errorMessage}>
             <span
               style={{
                 width: '8px',
                 height: '8px',
-                backgroundColor: '#dc2626',
+                backgroundColor: isSocketConnected ? '#16a34a' : '#dc2626',
                 borderRadius: '50%',
+                animation: isSocketConnected ? 'pulse 2s infinite' : 'none',
               }}
             ></span>
-            {error}
+            {isSocketConnected ? 'Connected' : 'Disconnected'}
           </div>
-        )}
+        </div>
 
-        {transactions.length === 0 ? (
-          <div style={styles.emptyState}>
-            <div style={styles.emptyIcon}>
-              <FileText size={32} color="#9ca3af" />
+        {/* Balance Overview Card */}
+        <div style={styles.balanceCard}>
+          <div style={styles.balanceHeader}>
+            <h2 style={styles.balanceTitle}>
+              <TrendingUp size={20} color="#2563eb" />
+              Balance Overview
+            </h2>
+            <button
+              style={styles.settleButton}
+              onClick={handleSettleUp}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'scale(1.05)';
+                e.target.style.boxShadow =
+                  '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'scale(1)';
+                e.target.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              Settle Up
+            </button>
+          </div>
+
+          <div style={styles.balanceGrid}>
+            {/* My Balance */}
+            <div style={styles.myBalanceCard}>
+              <div style={styles.balanceInfo}>
+                <div
+                  style={{
+                    ...styles.balanceIcon,
+                    backgroundColor:
+                      myBalance > 0
+                        ? '#dcfce7'
+                        : myBalance < 0
+                        ? '#fee2e2'
+                        : '#f3f4f6',
+                  }}
+                >
+                  {myBalance > 0 ? (
+                    <TrendingUp size={20} color="#16a34a" />
+                  ) : myBalance < 0 ? (
+                    <TrendingDown size={20} color="#dc2626" />
+                  ) : (
+                    <CheckCircle size={20} color="#6b7280" />
+                  )}
+                </div>
+                <div>
+                  <h3 style={styles.balanceLabel}>Your Balance</h3>
+                  <p
+                    style={{
+                      ...styles.balanceAmount,
+                      color:
+                        myBalance > 0
+                          ? '#16a34a'
+                          : myBalance < 0
+                          ? '#dc2626'
+                          : '#6b7280',
+                    }}
+                  >
+                    {formatCurrency(Math.abs(myBalance))}
+                  </p>
+                </div>
+              </div>
+
+              {myBalance > 0 && (
+                <div
+                  style={{
+                    ...styles.balanceDetail,
+                    color: '#166534',
+                    backgroundColor: '#f0fdf4',
+                  }}
+                >
+                  <p style={{ fontWeight: '500', margin: '0 0 4px 0' }}>
+                    You spent more
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    {Object.entries(balances)
+                      .filter(
+                        ([userId, bal]) => bal < 0 && userId !== user?.userId
+                      )
+                      .map(([userId, bal]) => {
+                        const username = getUsername(userId);
+                        const amountOwed = Math.abs(bal);
+                        return `${username} owes you ${formatCurrency(
+                          amountOwed
+                        )}`;
+                      })
+                      .join(', ') || 'from various members'}
+                  </p>
+                </div>
+              )}
+
+              {myBalance < 0 && (
+                <div
+                  style={{
+                    ...styles.balanceDetail,
+                    color: '#991b1b',
+                    backgroundColor: '#fef2f2',
+                  }}
+                >
+                  <p style={{ fontWeight: '500', margin: '0 0 4px 0' }}>
+                    You spent less
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    {Object.entries(balances)
+                      .filter(
+                        ([userId, bal]) => bal > 0 && userId !== user?.userId
+                      )
+                      .map(([userId, bal]) => {
+                        const username = getUsername(userId);
+                        const amountToPay = Math.abs(bal);
+                        return `You owe ${username} ${formatCurrency(
+                          amountToPay
+                        )}`;
+                      })
+                      .join(', ') || 'to various members'}
+                  </p>
+                </div>
+              )}
+
+              {myBalance === 0 && transactions.length > 0 && (
+                <div
+                  style={{
+                    ...styles.balanceDetail,
+                    color: '#6b7280',
+                    backgroundColor: '#f9fafb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <CheckCircle size={16} color="#16a34a" />
+                  <span>You're all settled up!</span>
+                </div>
+              )}
             </div>
-            <p style={styles.emptyTitle}>No transactions yet</p>
-            <p style={styles.emptySubtitle}>
-              Start by adding your first expense!
-            </p>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={styles.table}>
-              <thead style={styles.tableHeader}>
-                <tr>
-                  <th style={styles.tableHeaderCell}>Description</th>
-                  <th style={styles.tableHeaderCell}>Category</th>
-                  <th style={styles.tableHeaderCell}>Amount</th>
-                  <th style={styles.tableHeaderCell}>Paid By</th>
-                  <th style={styles.tableHeaderCell}>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((tx) => {
-                  const isSettlement =
-                    tx.isSettlement ||
-                    tx.category?.toLowerCase() === 'settlement';
-                  const isOwedToPurchaser = tx.owedToPurchaser && !isSettlement;
 
-                  return (
-                    <tr
-                      key={tx._id}
-                      style={{
-                        ...styles.tableRow,
-                        ...(isSettlement ? styles.settlementRow : {}),
-                        ...(isOwedToPurchaser ? styles.owedToPurchaserRow : {}),
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.backgroundColor = isSettlement
-                          ? '#dcfce7'
-                          : isOwedToPurchaser
-                          ? '#fde68a'
-                          : '#f9fafb')
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.backgroundColor = isSettlement
-                          ? '#f0fdf4'
-                          : isOwedToPurchaser
-                          ? '#fef3c7'
-                          : 'transparent')
-                      }
-                    >
-                      <td style={styles.tableCell}>
-                        <div>
-                          <div
-                            style={{
-                              ...styles.transactionDescription,
-                              ...(isSettlement
-                                ? styles.settlementDescription
-                                : {}),
-                              ...(isOwedToPurchaser
-                                ? styles.owedToPurchaserDescription
-                                : {}),
-                            }}
-                          >
-                            {isSettlement
-                              ? 'Settlement Payment'
-                              : tx.description || 'No description'}
-                          </div>
-                          {tx.notes && (
-                            <div style={styles.transactionNotes}>
-                              {tx.notes}
+            {/* Quick Stats */}
+            <div style={styles.statsGrid}>
+              <div style={{ ...styles.statCard, ...styles.statCardPurple }}>
+                <div>
+                  <p style={styles.statLabel}>
+                    Total Expense Since Last Settlement
+                  </p>
+                  <p style={{ ...styles.statValue, color: '#7c3aed' }}>
+                    {formatCurrency(recentTotal)}
+                  </p>
+                </div>
+                <DollarSign size={32} color="#a855f7" />
+              </div>
+              <div style={{ ...styles.statCard, ...styles.statCardOrange }}>
+                <div>
+                  <p style={styles.statLabel}>
+                    Amount of transactions since last settlement
+                  </p>
+                  <p style={{ ...styles.statValue, color: '#ea580c' }}>
+                    {recentSumTransactions}
+                  </p>
+                </div>
+                <FileText size={32} color="#fb923c" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Transactions Table */}
+        <div style={styles.transactionsCard}>
+          <div style={styles.transactionsHeader}>
+            <h2 style={styles.transactionsTitle}>
+              <CreditCard size={20} color="#6b7280" />
+              Recent Transactions
+            </h2>
+          </div>
+
+          {error && (
+            <div style={styles.errorMessage}>
+              <span
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  backgroundColor: '#dc2626',
+                  borderRadius: '50%',
+                }}
+              ></span>
+              {error}
+            </div>
+          )}
+
+          {transactions.length === 0 ? (
+            <div style={styles.emptyState}>
+              <div style={styles.emptyIcon}>
+                <FileText size={32} color="#9ca3af" />
+              </div>
+              <p style={styles.emptyTitle}>No transactions yet</p>
+              <p style={styles.emptySubtitle}>
+                Start by adding your first expense!
+              </p>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={styles.table}>
+                <thead style={styles.tableHeader}>
+                  <tr>
+                    <th style={styles.tableHeaderCell}>Description</th>
+                    <th style={styles.tableHeaderCell}>Category</th>
+                    <th style={styles.tableHeaderCell}>Amount</th>
+                    <th style={styles.tableHeaderCell}>Paid By</th>
+                    <th style={styles.tableHeaderCell}>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((tx) => {
+                    const isSettlement =
+                      tx.isSettlement ||
+                      tx.category?.toLowerCase() === 'settlement';
+                    const isOwedToPurchaser =
+                      tx.owedToPurchaser && !isSettlement;
+
+                    return (
+                      <tr
+                        key={tx._id}
+                        style={{
+                          ...styles.tableRow,
+                          ...(isSettlement ? styles.settlementRow : {}),
+                          ...(isOwedToPurchaser
+                            ? styles.owedToPurchaserRow
+                            : {}),
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.backgroundColor = isSettlement
+                            ? '#dcfce7'
+                            : isOwedToPurchaser
+                            ? '#fde68a'
+                            : '#f9fafb')
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.backgroundColor = isSettlement
+                            ? '#f0fdf4'
+                            : isOwedToPurchaser
+                            ? '#fef3c7'
+                            : 'transparent')
+                        }
+                      >
+                        <td style={styles.tableCell}>
+                          <div>
+                            <div
+                              style={{
+                                ...styles.transactionDescription,
+                                ...(isSettlement
+                                  ? styles.settlementDescription
+                                  : {}),
+                                ...(isOwedToPurchaser
+                                  ? styles.owedToPurchaserDescription
+                                  : {}),
+                              }}
+                            >
+                              {isSettlement
+                                ? 'Settlement Payment'
+                                : tx.description || 'No description'}
                             </div>
-                          )}
-                        </div>
-                      </td>
-                      <td style={styles.tableCell}>
-                        <div style={styles.categoryContainer}>
-                          <span style={{ fontSize: '18px' }}>
-                            {isSettlement ? '💰' : getCategoryIcon(tx.category)}
-                          </span>
-                          <span style={styles.categoryText}>
-                            {isSettlement
-                              ? 'Settlement'
-                              : tx.category || 'Uncategorized'}
-                          </span>
-                        </div>
-                      </td>
-                      <td style={styles.tableCell}>
-                        <span
-                          style={{
-                            ...styles.amountText,
-                            ...(isSettlement ? styles.settlementAmount : {}),
-                            ...(isOwedToPurchaser
-                              ? styles.owedToPurchaserAmount
-                              : {}),
-                          }}
-                        >
-                          {formatCurrency(tx.amount)}
-                        </span>
-                        {isOwedToPurchaser && (
-                          <div
-                            style={{
-                              fontSize: '11px',
-                              color: '#92400e',
-                              fontWeight: '600',
-                              marginTop: '2px',
-                            }}
-                          >
-                            Owed full amount
+                            {tx.notes && (
+                              <div style={styles.transactionNotes}>
+                                {tx.notes}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </td>
-                      <td style={styles.tableCell}>
-                        <div style={styles.userContainer}>
-                          <div
+                        </td>
+                        <td style={styles.tableCell}>
+                          <div style={styles.categoryContainer}>
+                            <span style={{ fontSize: '18px' }}>
+                              {isSettlement
+                                ? '💰'
+                                : getCategoryIcon(tx.category)}
+                            </span>
+                            <span style={styles.categoryText}>
+                              {isSettlement
+                                ? 'Settlement'
+                                : tx.category || 'Uncategorized'}
+                            </span>
+                          </div>
+                        </td>
+                        <td style={styles.tableCell}>
+                          <span
                             style={{
-                              ...styles.userAvatar,
-                              ...(isSettlement
-                                ? {
-                                    background:
-                                      'linear-gradient(135deg, #16a34a 0%, #22c55e 100%)',
-                                  }
-                                : isOwedToPurchaser
-                                ? {
-                                    background:
-                                      'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
-                                  }
+                              ...styles.amountText,
+                              ...(isSettlement ? styles.settlementAmount : {}),
+                              ...(isOwedToPurchaser
+                                ? styles.owedToPurchaserAmount
                                 : {}),
                             }}
                           >
-                            <User size={16} color="white" />
-                          </div>
-                          <span style={styles.userName}>
-                            {tx.paidBy?.username || 'Unknown'}
+                            {formatCurrency(tx.amount)}
                           </span>
                           {isOwedToPurchaser && (
-                            <span
+                            <div
                               style={{
                                 fontSize: '11px',
                                 color: '#92400e',
                                 fontWeight: '600',
-                                marginLeft: '4px',
+                                marginTop: '2px',
                               }}
-                            ></span>
+                            >
+                              Owed full amount
+                            </div>
                           )}
-                        </div>
-                      </td>
-                      <td style={styles.tableCell}>
-                        <div style={styles.dateContainer}>
-                          <Calendar size={16} />
-                          {new Date(tx.date).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        </td>
+                        <td style={styles.tableCell}>
+                          <div style={styles.userContainer}>
+                            <div
+                              style={{
+                                ...styles.userAvatar,
+                                ...(isSettlement
+                                  ? {
+                                      background:
+                                        'linear-gradient(135deg, #16a34a 0%, #22c55e 100%)',
+                                    }
+                                  : isOwedToPurchaser
+                                  ? {
+                                      background:
+                                        'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
+                                    }
+                                  : {}),
+                              }}
+                            >
+                              <User size={16} color="white" />
+                            </div>
+                            <span style={styles.userName}>
+                              {tx.paidBy?.username || 'Unknown'}
+                            </span>
+                            {isOwedToPurchaser && (
+                              <span
+                                style={{
+                                  fontSize: '11px',
+                                  color: '#92400e',
+                                  fontWeight: '600',
+                                  marginLeft: '4px',
+                                }}
+                              ></span>
+                            )}
+                          </div>
+                        </td>
+                        <td style={styles.tableCell}>
+                          <div style={styles.dateContainer}>
+                            <Calendar size={16} />
+                            {new Date(tx.date).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Add connection pulse animation */}
+        <style>
+          {`
+            @keyframes pulse {
+              0% {
+                box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
+              }
+              70% {
+                box-shadow: 0 0 0 6px rgba(22, 163, 74, 0);
+              }
+              100% {
+                box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+              }
+            }
+          `}
+        </style>
       </div>
-    </div>
+    </>
   );
 };
 

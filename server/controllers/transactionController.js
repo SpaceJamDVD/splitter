@@ -1,10 +1,10 @@
 // server/controllers/transactionController.js
-
 const Transaction = require('../models/Transaction');
 const MemberBalance = require('../models/MemberBalance');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Group = require('../models/Group');
+const Budget = require('../models/Budget');
 
 class TransactionController {
   async createTransaction(req, res) {
@@ -89,6 +89,18 @@ class TransactionController {
       // Get the io instance from the app
       const io = req.app.get('io');
 
+      // ========== BUDGET ALERT CHECK ==========
+      if (category && io) {
+        const budgetController = require('./budgetController');
+        await budgetController.checkBudgetImpactForTransaction(
+          groupId,
+          category,
+          amount,
+          populatedTransaction,
+          io
+        );
+      }
+
       if (io) {
         console.log(`Emitting transaction-update to group-${groupId}`);
 
@@ -116,18 +128,6 @@ class TransactionController {
         } catch (balanceError) {
           console.error('Failed to emit balance update:', balanceError);
         }
-
-        // Optional: Emit a notification to group members
-        io.to(`group-${groupId}`).emit('notification', {
-          id: Date.now(),
-          type: 'transaction',
-          message: `${
-            populatedTransaction.paidBy.username
-          } added a new expense: ${description || 'New transaction'}`,
-          amount: amount,
-          groupId: groupId,
-          timestamp: new Date().toISOString(),
-        });
       } else {
         console.warn('Socket.IO instance not found on app');
       }

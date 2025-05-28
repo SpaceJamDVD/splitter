@@ -1,6 +1,7 @@
 // server/controllers/authController.js
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
+const Group = require('../models/Group');
 const jwt = require('jsonwebtoken');
 
 class AuthController {
@@ -103,21 +104,27 @@ class AuthController {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
+      // Get the user's group (assuming couples app - user is in one primary group)
+      const userGroups = await Group.find({ members: user._id });
+      const primaryGroupId = userGroups.length > 0 ? userGroups[0]._id : null;
+
       // Create JWT payload
       const payload = {
         userId: user._id,
         username: user.username,
+        groupId: primaryGroupId,
       };
 
       // Generate token
       const token = jwt.sign(payload, process.env.JWT_SECRET, {
-        expiresIn: '24h', // Extended to 24h for better UX
+        expiresIn: '24h',
       });
 
       res.json({
         token,
         username: user.username,
         userId: user._id,
+        groupId: primaryGroupId, // Also include in response
       });
     } catch (err) {
       console.error('Login error:', err);
@@ -128,7 +135,6 @@ class AuthController {
   // Verify token (optional - for checking if user is still authenticated)
   async verifyToken(req, res) {
     try {
-      // Token is already verified by middleware, so user is in req.user
       const user = await User.findById(req.user.userId).select('-passwordHash');
 
       if (!user) {

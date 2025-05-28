@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { NavLink } from 'react-router-dom';
 import { logout } from '../api.js';
+import { AuthContext } from '../contexts/AuthContext.jsx';
 import {
   FaHome,
   FaUsers,
@@ -8,6 +9,7 @@ import {
   FaSignOutAlt,
   FaBars,
   FaTimes,
+  FaPiggyBank,
 } from 'react-icons/fa';
 
 const BREAKPOINT_MOBILE = 768;
@@ -15,6 +17,9 @@ const NAVBAR_WIDTH_PX = 280;
 const ANIMATION_DURATION_MS = 300;
 
 const Navbar = () => {
+  // Add debugging and error handling
+  const authContext = useContext(AuthContext);
+  const { user } = authContext;
   const initialIsMobile = window.innerWidth <= BREAKPOINT_MOBILE;
   const [isMobile, setIsMobile] = useState(initialIsMobile);
   const [isOpen, setIsOpen] = useState(!initialIsMobile);
@@ -280,6 +285,22 @@ const Navbar = () => {
                 <FaHome />
               </div>
               Our Expenses
+            </NavLink>
+          </div>
+
+          <div style={styles.linkContainer}>
+            <NavLink
+              to={user?.groupId ? `/budgets/${user.groupId}` : '/budgets'}
+              style={getNavLinkStyle}
+              onClick={handleNavLinkClick}
+              onMouseEnter={(e) => handleLinkHover(e, true)}
+              onMouseLeave={(e) => handleLinkHover(e, false)}
+              className={({ isActive }) => (isActive ? 'active-link' : '')}
+            >
+              <div style={styles.iconWrapper}>
+                <FaPiggyBank />
+              </div>
+              Our Budgets
             </NavLink>
           </div>
 

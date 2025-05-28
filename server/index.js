@@ -17,7 +17,7 @@ const io = require('socket.io')(server, {
   },
 });
 
-// CORS setup (only once)
+// CORS setup
 app.use(
   cors({
     origin: process.env.CLIENT_URL || 'http://localhost:3000',
@@ -25,7 +25,7 @@ app.use(
   })
 );
 
-// Body parsing (only once)
+// Body parsing
 app.use(express.json());
 
 // Connect to MongoDB
@@ -53,6 +53,9 @@ app.use('/api/transactions', requireAuth, transactionRoutes);
 
 const memberBalanceRoutes = require('./routes/memberBalance');
 app.use('/api/memberBalance', requireAuth, memberBalanceRoutes);
+
+const budgetRoutes = require('./routes/budgets');
+app.use('/api/budgets', requireAuth, budgetRoutes);
 
 // Test route
 app.get('/api/test-db', async (req, res) => {

@@ -3,6 +3,7 @@ import { jwtDecode } from 'jwt-decode';
 
 export const AuthContext = createContext();
 
+// In your AuthContext
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -17,8 +18,8 @@ export const AuthProvider = ({ children }) => {
           console.warn('Token expired');
           logout();
         } else {
-          setUser(decodedUser);
-          setToken(storedToken); // Update token state
+          setUser(decodedUser); // This will now include groupId
+          setToken(storedToken);
         }
       } catch (error) {
         console.error('Invalid token', error);
@@ -29,14 +30,14 @@ export const AuthProvider = ({ children }) => {
 
   const login = (newToken) => {
     localStorage.setItem('token', newToken);
-    setToken(newToken); // Update token state
+    setToken(newToken);
     const decodedUser = jwtDecode(newToken);
-    setUser(decodedUser);
+    setUser(decodedUser); // This will include groupId
   };
 
   const logout = () => {
     localStorage.removeItem('token');
-    setToken(null); // Clear token state
+    setToken(null);
     setUser(null);
   };
 

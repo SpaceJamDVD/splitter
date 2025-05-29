@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import LoginForm from '../components/LoginForm';
+import RegisterForm from '../components/RegisterForm';
 import { getInviteInfo, joinGroupWithToken } from '../services/groupService';
 
 const JoinGroupPage = () => {
@@ -33,18 +33,15 @@ const JoinGroupPage = () => {
   // Auto-join for authenticated users who aren't members
   useEffect(() => {
     if (user && groupInfo && !joining) {
-      // Check if user is already a member
       const isAlreadyMember = groupInfo.members?.some(
         (member) => member._id === user.userId
       );
 
       if (isAlreadyMember) {
-        console.log('User is already a member, redirecting...');
         navigate('/dashboard');
         return;
       }
 
-      // User is logged in but not a member - join them automatically
       handleJoinGroup();
     }
   }, [user, groupInfo, joining]);
@@ -52,18 +49,15 @@ const JoinGroupPage = () => {
   const handleJoinGroup = async (userData = null) => {
     if (joining) return;
 
-    // IMPORTANT: Only proceed if we have valid user data for new users
-    // or if the user is already authenticated
     if (!user && (!userData || !userData.username || !userData.password)) {
       setError('Please provide a username and password to join');
       return;
     }
 
     setJoining(true);
-    setError(''); // Clear any previous errors
+    setError('');
 
     try {
-      // Only pass userData if it exists and has required fields
       const requestData =
         userData && userData.username && userData.password
           ? userData
@@ -71,17 +65,15 @@ const JoinGroupPage = () => {
 
       const response = await joinGroupWithToken(inviteToken, requestData);
 
-      // If new user was created, log them in
       if (response.token) {
         await login(response.token);
       }
 
-      // Navigate to the dashboard
       navigate('/dashboard');
     } catch (err) {
       console.error('Join group error:', err);
       setError(err.response?.data?.error || 'Failed to join group');
-      setJoining(false); // Reset joining state on error
+      setJoining(false);
     }
   };
 
@@ -159,11 +151,10 @@ const JoinGroupPage = () => {
     );
   }
 
-  // Show login form for non-authenticated users
   if (!user) {
     return (
       <div style={styles.container}>
-        <LoginForm
+        <RegisterForm
           mode="join"
           inviteToken={inviteToken}
           groupName={groupInfo?.groupName}
@@ -174,7 +165,6 @@ const JoinGroupPage = () => {
     );
   }
 
-  // This shouldn't be reached due to auto-join effect, but just in case
   return (
     <div style={styles.container}>
       <div style={styles.loadingContainer}>

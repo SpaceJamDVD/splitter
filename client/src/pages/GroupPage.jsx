@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import Navbar from '../components/Navbar';
+import React, { useEffect, useState, useContext } from 'react';
 import TransactionForm from '../components/TransactionForm';
 import TransactionList from '../components/TransactionList';
-import { useParams } from 'react-router-dom';
 import GroupForm from '../components/GroupForm';
+import { AuthContext } from '../contexts/AuthContext';
 import { getGroupById, getUserGroup } from '../services/groupService';
 import {
   Users,
@@ -16,9 +15,8 @@ import {
 } from 'lucide-react';
 
 const GroupPage = () => {
-  const { id } = useParams();
+  const { refreshUserData } = useContext(AuthContext);
   // If no ID from URL, get user's first group
-  const [shouldGetUserGroup, setShouldGetUserGroup] = useState(!id);
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,18 +32,15 @@ const GroupPage = () => {
   useEffect(() => {
     const loadGroup = async () => {
       try {
-        let data;
-        if (id) {
-          data = await getGroupById(id);
-        } else {
-          data = await getUserGroup(); // Returns group object or null
-          if (!data) {
-            setShowCreateGroup(true);
-            setLoading(false);
-            return;
-          }
-          // data is already the full group with populated members
+        const refreshedUser = await refreshUserData(); // Refresh user data to ensure we have the latest info
+        const data = await getUserGroup();
+
+        if (!data) {
+          setShowCreateGroup(true);
+          setLoading(false);
+          return;
         }
+
         setGroup(data);
         setCanAddTransaction(data.members?.length >= 2);
         setShowInviteButton(data.members?.length < 2);
@@ -58,7 +53,7 @@ const GroupPage = () => {
     };
 
     loadGroup();
-  }, [id]);
+  }, []);
 
   const inviteLink = `${window.location.origin}/join/${group?.inviteToken}`;
 

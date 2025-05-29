@@ -9,26 +9,22 @@ import BudgetsPage from './pages/BudgetPage';
 import JoinGroupPage from './pages/JoinGroupPage';
 import SettingsPage from './pages/SettingsPage';
 import './App.css';
+import LandingPage from './pages/LandingPage';
+import RegisterPage from './pages/RegisterPage';
 
 function App() {
   return (
     <AuthProvider>
       <Router>
         <Routes>
-          {/* Public routes (no layout - login should be full screen) */}
+          {/* Public routes (no layout) */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/register" element={<RegisterPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/join/:inviteToken" element={<JoinGroupPage />} />
           {/* Protected routes (with layout) */}
           <Route
             path="/dashboard"
-            element={
-              <Layout>
-                <GroupPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/groups/:id"
             element={
               <Layout>
                 <GroupPage />

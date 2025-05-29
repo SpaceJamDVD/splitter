@@ -1,17 +1,29 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Lock, LogIn, AlertCircle, Heart } from 'lucide-react';
+import {
+  User,
+  Lock,
+  Mail,
+  UserPlus,
+  AlertCircle,
+  CheckCircle,
+  Heart,
+} from 'lucide-react';
 import { AuthContext } from '../contexts/AuthContext';
 import API from '../api';
 
-function LoginForm({
+function RegisterForm({
   onSuccess = null,
   error = null,
-  onNavigateToRegister = null,
+  onNavigateToLogin = null,
+  groupName = null,
 }) {
   const [formData, setFormData] = useState({
     username: '',
+    email: '',
     password: '',
+    firstName: '',
+    lastName: '',
   });
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
@@ -34,39 +46,59 @@ function LoginForm({
     if (message) setMessage('');
   };
 
-  const handleLogin = async () => {
-    if (!formData.username || !formData.password) {
-      setMessage('Please enter username/email and password');
+  const handleRegister = async () => {
+    // Enhanced validation
+    if (!formData.username || !formData.password || !formData.email) {
+      setMessage('Username, email, and password are required');
+      setMessageType('error');
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setMessage('Please enter a valid email address');
+      setMessageType('error');
+      return;
+    }
+
+    // Password strength validation
+    if (formData.password.length < 6) {
+      setMessage('Password must be at least 6 characters long');
       setMessageType('error');
       return;
     }
 
     try {
       setLoading(true);
-      const res = await API.post('/auth/login', {
+      const payload = {
         username: formData.username.trim(),
+        email: formData.email.trim(),
         password: formData.password,
-      });
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+      };
 
-      const { token, user } = res.data;
+      const res = await API.post('/auth/register', payload);
+
+      setMessage('Account created successfully!');
+      setMessageType('success');
 
       // Use AuthContext login method instead of setting localStorage directly
+      const { token, user } = res.data;
       authLogin(token, user);
 
+      // Call onSuccess callback or navigate
       if (onSuccess) {
         onSuccess(token, user);
       } else {
-        navigate('/dashboard');
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1000);
       }
     } catch (err) {
-      console.error('Login error:', err);
-
-      // Handle specific error cases
-      if (err.response?.status === 423) {
-        setMessage('Account temporarily locked. Please try again later.');
-      } else {
-        setMessage(err.response?.data?.error || 'Login failed');
-      }
+      console.error('Registration error:', err);
+      setMessage(err.response?.data?.error || 'Registration failed');
       setMessageType('error');
     } finally {
       setLoading(false);
@@ -146,6 +178,23 @@ function LoginForm({
       transform: 'translateY(-50%)',
       color: '#9ca3af',
     },
+    nameRow: {
+      display: 'flex',
+      gap: '8px',
+      width: '100%',
+    },
+    nameInput: {
+      flex: 1,
+      minWidth: 0,
+      padding: '12px 12px',
+      borderRadius: '8px',
+      border: '1px solid #d1d5db',
+      fontSize: '14px',
+      transition: 'all 0.2s ease',
+      outline: 'none',
+      fontFamily: 'inherit',
+      boxSizing: 'border-box',
+    },
     button: {
       width: '100%',
       padding: '12px 24px',
@@ -181,10 +230,17 @@ function LoginForm({
       marginTop: '16px',
       width: '100%',
       textAlign: 'left',
+      boxSizing: 'border-box',
+    },
+    successMessage: {
+      background: 'linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%)',
+      color: '#166534',
+      border: '1px solid #bbf7d0',
+    },
+    errorMessage: {
       background: 'linear-gradient(135deg, #fee2e2 0%, #fef2f2 100%)',
       color: '#dc2626',
       border: '1px solid #fecaca',
-      boxSizing: 'border-box',
     },
     toggleText: {
       textAlign: 'center',
@@ -206,8 +262,14 @@ function LoginForm({
         <div style={styles.icon}>
           <Heart size={24} color="#7c3aed" />
         </div>
-        <h1 style={styles.title}>Welcome Back</h1>
-        <p style={styles.subtitle}>Sign in to your account</p>
+        <h1 style={styles.title}>
+          {groupName ? 'Join the Group' : 'Create Account'}
+        </h1>
+        <p style={styles.subtitle}>
+          {groupName
+            ? `You’ve been invited to join the group “${groupName}”. Create an account to continue.`
+            : 'Start tracking your shared expenses'}
+        </p>
       </div>
 
       <div style={styles.form}>
@@ -222,6 +284,48 @@ function LoginForm({
             onFocus={(e) => Object.assign(e.target.style, styles.inputFocus)}
             onBlur={(e) => Object.assign(e.target.style, styles.input)}
             disabled={loading}
+            autoComplete="username"
+          />
+        </div>
+
+        <div style={styles.inputGroup}>
+          <Mail size={20} style={styles.inputIcon} />
+          <input
+            type="email"
+            placeholder="Email"
+            value={formData.email}
+            onChange={handleInputChange('email')}
+            style={styles.input}
+            onFocus={(e) => Object.assign(e.target.style, styles.inputFocus)}
+            onBlur={(e) => Object.assign(e.target.style, styles.input)}
+            disabled={loading}
+            autoComplete="email"
+            required
+          />
+        </div>
+
+        <div style={styles.nameRow}>
+          <input
+            type="text"
+            placeholder="First Name (optional)"
+            value={formData.firstName}
+            onChange={handleInputChange('firstName')}
+            style={styles.nameInput}
+            onFocus={(e) => Object.assign(e.target.style, styles.inputFocus)}
+            onBlur={(e) => Object.assign(e.target.style, styles.nameInput)}
+            disabled={loading}
+            autoComplete="given-name"
+          />
+          <input
+            type="text"
+            placeholder="Last Name (optional)"
+            value={formData.lastName}
+            onChange={handleInputChange('lastName')}
+            style={styles.nameInput}
+            onFocus={(e) => Object.assign(e.target.style, styles.inputFocus)}
+            onBlur={(e) => Object.assign(e.target.style, styles.nameInput)}
+            disabled={loading}
+            autoComplete="family-name"
           />
         </div>
 
@@ -229,19 +333,20 @@ function LoginForm({
           <Lock size={20} style={styles.inputIcon} />
           <input
             type="password"
-            placeholder="Password"
+            placeholder="Password (min 6 characters)"
             value={formData.password}
             onChange={handleInputChange('password')}
             style={styles.input}
             onFocus={(e) => Object.assign(e.target.style, styles.inputFocus)}
             onBlur={(e) => Object.assign(e.target.style, styles.input)}
             disabled={loading}
+            autoComplete="new-password"
           />
         </div>
 
         <button
           type="button"
-          onClick={handleLogin}
+          onClick={handleRegister}
           disabled={loading}
           style={{
             ...styles.button,
@@ -264,27 +369,38 @@ function LoginForm({
           {loading ? (
             <>
               <div className="spinner" />
-              Signing in...
+              Creating account...
             </>
           ) : (
             <>
-              <LogIn size={16} />
-              Sign In
+              <UserPlus size={16} />
+              {groupName ? 'Join Group' : 'Create Account'}
             </>
           )}
         </button>
 
         <div style={styles.toggleText}>
-          Don't have an account?{' '}
-          <span style={styles.toggleLink} onClick={onNavigateToRegister}>
-            Sign up
+          Already have an account?{' '}
+          <span style={styles.toggleLink} onClick={onNavigateToLogin}>
+            Sign in
           </span>
         </div>
       </div>
 
       {message && (
-        <div style={styles.message}>
-          <AlertCircle size={16} />
+        <div
+          style={{
+            ...styles.message,
+            ...(messageType === 'success'
+              ? styles.successMessage
+              : styles.errorMessage),
+          }}
+        >
+          {messageType === 'success' ? (
+            <CheckCircle size={16} />
+          ) : (
+            <AlertCircle size={16} />
+          )}
           {message}
         </div>
       )}
@@ -311,4 +427,4 @@ function LoginForm({
   );
 }
 
-export default LoginForm;
+export default RegisterForm;

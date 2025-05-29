@@ -144,7 +144,6 @@ class AuthController {
       // Get user's groups
       const userGroups = await Group.find({
         members: user._id,
-        isActive: true,
       });
       const primaryGroupId = userGroups.length > 0 ? userGroups[0]._id : null;
 

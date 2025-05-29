@@ -16,7 +16,7 @@ function App() {
       <Router>
         <Routes>
           {/* Public routes (no layout - login should be full screen) */}
-          <Route path="/" element={<LoginPage />} />
+          <Route path="/login" element={<LoginPage />} />
           <Route path="/join/:inviteToken" element={<JoinGroupPage />} />
           {/* Protected routes (with layout) */}
           <Route

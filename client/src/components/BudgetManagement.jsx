@@ -18,10 +18,16 @@ import {
   Target,
   TrendingUp,
   Calendar,
+  Loader,
 } from 'lucide-react';
 
 const BudgetManagement = ({ groupId }) => {
-  const { user, token } = useContext(AuthContext);
+  const {
+    user,
+    token,
+    loading: authLoading,
+    isLoggedIn,
+  } = useContext(AuthContext);
   const [budgets, setBudgets] = useState([]);
   const [overview, setOverview] = useState(null);
   const [categories, setCategories] = useState({
@@ -37,7 +43,15 @@ const BudgetManagement = ({ groupId }) => {
 
   useEffect(() => {
     const fetchAllData = async () => {
-      if (!groupId) return;
+      // Wait for auth to complete
+      if (authLoading) return;
+
+      // Ensure user is logged in and we have a groupId
+      if (!isLoggedIn || !groupId) {
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         await Promise.all([fetchBudgets(), fetchOverview(), fetchCategories()]);
@@ -50,7 +64,7 @@ const BudgetManagement = ({ groupId }) => {
     };
 
     fetchAllData();
-  }, [groupId]);
+  }, [groupId, authLoading, isLoggedIn]);
 
   const fetchBudgets = async () => {
     try {
@@ -185,6 +199,14 @@ const BudgetManagement = ({ groupId }) => {
       minHeight: '100vh',
       fontFamily:
         '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    },
+    loadingContainer: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '50vh',
+      flexDirection: 'column',
+      gap: '16px',
     },
     header: {
       marginBottom: '32px',
@@ -492,20 +514,23 @@ const BudgetManagement = ({ groupId }) => {
     },
   };
 
-  if (loading) {
+  // Show loading while auth is loading or data is loading
+  if (authLoading || (loading && isLoggedIn)) {
     return (
       <div style={styles.container}>
-        <div style={styles.header}>
-          <div style={styles.headerContent}>
-            <h1 style={styles.title}>
-              <Target size={32} color="#2563eb" />
-              Budget Management
-            </h1>
-            <p style={styles.subtitle}>Loading...</p>
-          </div>
+        <div style={styles.loadingContainer}>
+          <Loader size={48} color="#2563eb" className="animate-spin" />
+          <p style={styles.subtitle}>
+            {authLoading ? 'Checking authentication...' : 'Loading budgets...'}
+          </p>
         </div>
       </div>
     );
+  }
+
+  // Don't render anything if not logged in (parent should handle this)
+  if (!isLoggedIn) {
+    return null;
   }
 
   return (

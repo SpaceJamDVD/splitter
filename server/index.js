@@ -69,12 +69,12 @@ app.get('/api/test-db', async (req, res) => {
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+  //console.log('User connected:', socket.id);
 
   // Handle custom events
   socket.on('join-room', (roomId) => {
     socket.join(roomId);
-    console.log(`User ${socket.id} joined room ${roomId}`);
+    //console.log(`User ${socket.id} joined room ${roomId}`);
   });
 
   socket.on('send-message', (data) => {
@@ -83,7 +83,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+    //console.log('User disconnected:', socket.id);
   });
 });
 

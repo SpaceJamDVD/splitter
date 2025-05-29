@@ -1,5 +1,4 @@
 // server/controllers/authController.js
-const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const Group = require('../models/Group');
 const jwt = require('jsonwebtoken');
@@ -7,53 +6,67 @@ const jwt = require('jsonwebtoken');
 class AuthController {
   // Register new user
   async register(req, res) {
-    const { username, password, email } = req.body;
+    const { username, password, email, firstName, lastName } = req.body;
 
     try {
-      // Check if user exists by username
-      const existingUsername = await User.findOne({ username });
-      if (existingUsername) {
-        return res.status(400).json({ error: 'Username already taken' });
-      }
-
-      // Check if user exists by email (if provided)
-      if (email) {
-        const existingEmail = await User.findOne({ email });
-        if (existingEmail) {
-          return res.status(400).json({ error: 'Email already taken' });
-        }
-      }
-
       // Validate required fields
-      if (!username || !password) {
-        return res
-          .status(400)
-          .json({ error: 'Username and password are required' });
+      if (!username || !password || !email) {
+        return res.status(400).json({
+          error: 'Username, email, and password are required',
+        });
       }
 
-      // Validate password strength (optional)
-      if (password.length < 6) {
-        return res
-          .status(400)
-          .json({ error: 'Password must be at least 6 characters' });
-      }
-
-      // Hash password
-      const passwordHash = await bcrypt.hash(password, 10);
-
-      // Create and save user
+      // Create user - let Mongoose handle validation and password hashing
       const user = new User({
-        username,
-        passwordHash,
-        ...(email && { email }), // Include email if provided
+        username: username.trim(),
+        email: email.trim().toLowerCase(),
+        passwordHash: password, // Will be hashed by pre-save middleware
+        profile: {
+          firstName: firstName?.trim(),
+          lastName: lastName?.trim(),
+        },
+        // Set defaults for new users
+        isActive: true,
+        preferences: {
+          notifications: {
+            email: {
+              budgetAlerts: true,
+              transactionUpdates: true,
+              weeklyReports: false,
+            },
+            push: {
+              budgetAlerts: true,
+              transactionUpdates: false,
+            },
+          },
+        },
       });
 
       await user.save();
 
-      res.status(201).json({
-        message: 'User created successfully',
+      // Create JWT payload
+      const payload = {
         userId: user._id,
         username: user.username,
+        email: user.email,
+        isEmailVerified: user.isEmailVerified,
+      };
+
+      // Generate token
+      const token = jwt.sign(payload, process.env.JWT_SECRET, {
+        expiresIn: '7d',
+      });
+
+      res.status(201).json({
+        message: 'User created successfully',
+        token,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          fullName: user.profile.fullName,
+          isEmailVerified: user.isEmailVerified,
+        },
       });
     } catch (err) {
       console.error('Registration error:', err);
@@ -67,7 +80,10 @@ class AuthController {
       // Handle duplicate key errors
       if (err.code === 11000) {
         const field = Object.keys(err.keyPattern)[0];
-        return res.status(400).json({ error: `${field} already exists` });
+        const fieldName = field === 'email' ? 'Email' : 'Username';
+        return res.status(400).json({
+          error: `${fieldName} already exists`,
+        });
       }
 
       res.status(500).json({ error: 'Registration failed' });
@@ -81,50 +97,85 @@ class AuthController {
     try {
       // Validate required fields
       if (!username || !password) {
-        return res
-          .status(400)
-          .json({ error: 'Username and password are required' });
+        return res.status(400).json({
+          error: 'Username/email and password are required',
+        });
       }
 
-      // Find user (can login with username or email)
+      // Find user by username or email - include password for comparison
       const user = await User.findOne({
         $or: [
-          { username },
-          { email: username }, // Allow login with email as username
+          { username: username.trim() },
+          { email: username.trim().toLowerCase() },
         ],
-      });
+        isActive: true, // Only allow active users to login
+      }).select('+passwordHash'); // Include password for comparison
 
       if (!user) {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
-      // Compare password
-      const match = await bcrypt.compare(password, user.passwordHash);
-      if (!match) {
+      // Check if account is locked
+      if (user.isLocked) {
+        return res.status(423).json({
+          error:
+            'Account temporarily locked due to too many failed attempts. Try again later.',
+        });
+      }
+
+      // Compare password using the instance method
+      const isMatch = await user.comparePassword(password);
+
+      if (!isMatch) {
+        // Increment failed login attempts
+        await user.incLoginAttempts();
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
-      // Get the user's group (assuming couples app - user is in one primary group)
-      const userGroups = await Group.find({ members: user._id });
+      // Reset login attempts on successful login
+      if (user.loginAttempts > 0) {
+        await user.resetLoginAttempts();
+      }
+
+      // Update last login
+      user.lastLogin = new Date();
+      await user.save();
+
+      // Get user's groups
+      const userGroups = await Group.find({
+        members: user._id,
+        isActive: true,
+      });
       const primaryGroupId = userGroups.length > 0 ? userGroups[0]._id : null;
 
-      // Create JWT payload
+      // Create JWT payload with more user info
       const payload = {
         userId: user._id,
         username: user.username,
+        email: user.email,
         groupId: primaryGroupId,
+        isEmailVerified: user.isEmailVerified,
+        plan: user.subscription.plan,
       };
 
       // Generate token
       const token = jwt.sign(payload, process.env.JWT_SECRET, {
-        expiresIn: '24h',
+        expiresIn: '7d',
       });
 
       res.json({
         token,
-        username: user.username,
-        userId: user._id,
-        groupId: primaryGroupId, // Also include in response
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          fullName: user.profile.fullName,
+          avatar: user.profile.avatar,
+          isEmailVerified: user.isEmailVerified,
+          plan: user.subscription.plan,
+          groupId: primaryGroupId,
+          preferences: user.preferences,
+        },
       });
     } catch (err) {
       console.error('Login error:', err);
@@ -132,14 +183,20 @@ class AuthController {
     }
   }
 
-  // Verify token (optional - for checking if user is still authenticated)
+  // Verify token
   async verifyToken(req, res) {
     try {
-      const user = await User.findById(req.user.userId).select('-passwordHash');
+      const user = await User.findById(req.user.userId);
 
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
+      if (!user || !user.isActive) {
+        return res.status(404).json({ error: 'User not found or inactive' });
       }
+
+      // Get user's groups
+      const userGroups = await Group.find({
+        members: user._id,
+      });
+      const primaryGroupId = userGroups.length > 0 ? userGroups[0]._id : null;
 
       res.json({
         valid: true,
@@ -147,7 +204,13 @@ class AuthController {
           id: user._id,
           username: user.username,
           email: user.email,
-          createdAt: user.createdAt,
+          fullName: user.profile.fullName,
+          avatar: user.profile.avatar,
+          isEmailVerified: user.isEmailVerified,
+          plan: user.subscription.plan,
+          groupId: primaryGroupId,
+          preferences: user.preferences,
+          lastLogin: user.lastLogin,
         },
       });
     } catch (err) {
@@ -156,13 +219,118 @@ class AuthController {
     }
   }
 
-  // Logout (optional - mainly for client-side cleanup)
+  // Update user profile
+  async updateProfile(req, res) {
+    try {
+      const { firstName, lastName, timezone, currency } = req.body;
+      const userId = req.user.userId;
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Update profile fields
+      if (firstName !== undefined) user.profile.firstName = firstName.trim();
+      if (lastName !== undefined) user.profile.lastName = lastName.trim();
+      if (timezone !== undefined) user.profile.timezone = timezone;
+      if (currency !== undefined) user.profile.currency = currency;
+
+      await user.save();
+
+      res.json({
+        message: 'Profile updated successfully',
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          fullName: user.profile.fullName,
+          avatar: user.profile.avatar,
+          timezone: user.profile.timezone,
+          currency: user.profile.currency,
+        },
+      });
+    } catch (err) {
+      console.error('Profile update error:', err);
+
+      if (err.name === 'ValidationError') {
+        const errors = Object.values(err.errors).map((e) => e.message);
+        return res.status(400).json({ error: errors.join(', ') });
+      }
+
+      res.status(500).json({ error: 'Profile update failed' });
+    }
+  }
+
+  // Update user preferences
+  async updatePreferences(req, res) {
+    try {
+      const { preferences } = req.body;
+      const userId = req.user.userId;
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Merge preferences (deep merge)
+      if (preferences.notifications) {
+        user.preferences.notifications = {
+          ...user.preferences.notifications,
+          ...preferences.notifications,
+        };
+      }
+
+      if (preferences.privacy) {
+        user.preferences.privacy = {
+          ...user.preferences.privacy,
+          ...preferences.privacy,
+        };
+      }
+
+      await user.save();
+
+      res.json({
+        message: 'Preferences updated successfully',
+        preferences: user.preferences,
+      });
+    } catch (err) {
+      console.error('Preferences update error:', err);
+      res.status(500).json({ error: 'Preferences update failed' });
+    }
+  }
+
+  // Logout (server-side token blacklisting would go here if needed)
   async logout(req, res) {
     try {
-      res.json({ message: 'Logged out successfully' });
+      res.json({
+        message: 'Logged out successfully',
+      });
     } catch (err) {
       console.error('Logout error:', err);
       res.status(500).json({ error: 'Logout failed' });
+    }
+  }
+
+  // Soft delete user account
+  async deleteAccount(req, res) {
+    try {
+      const userId = req.user.userId;
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Soft delete
+      await user.softDelete();
+
+      res.json({
+        message: 'Account deactivated successfully',
+      });
+    } catch (err) {
+      console.error('Account deletion error:', err);
+      res.status(500).json({ error: 'Account deletion failed' });
     }
   }
 }

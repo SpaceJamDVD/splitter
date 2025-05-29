@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useCallback } from 'react';
 import {
   getGroupTransactions,
   settleUp,
@@ -7,7 +7,7 @@ import {
 import { getBalancesForGroup } from '../services/memberBalanceService';
 import { AuthContext } from '../contexts/AuthContext';
 import socketService from '../services/socketService';
-import BudgetAlertManager from './BudgetAlertManager'; // Import the alert manager
+import BudgetAlertManager from './BudgetAlertManager';
 import {
   DollarSign,
   Calendar,
@@ -17,10 +17,18 @@ import {
   TrendingUp,
   TrendingDown,
   CheckCircle,
+  Loader,
 } from 'lucide-react';
 
-const TransactionList = ({ groupId, members: allGroupMembers }) => {
-  const { user, token } = useContext(AuthContext);
+const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
+  const {
+    user,
+    token,
+    loading: authLoading,
+    isLoggedIn,
+  } = useContext(AuthContext);
+
+  // State management
   const [transactions, setTransactions] = useState([]);
   const [memberBalances, setMemberBalances] = useState([]);
   const [error, setError] = useState('');
@@ -29,123 +37,9 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
   const [recentTotal, setRecentTotal] = useState(0);
   const [recentSumTransactions, setRecentSumTransactions] = useState(0);
 
-  // Socket connection and room management
-  useEffect(() => {
-    if (!groupId || !token) return;
-
-    // Connect to socket with authentication
-    const socket = socketService.connect(token);
-
-    // Setup connection listeners
-    const handleConnect = () => {
-      setIsSocketConnected(true);
-      socketService.joinRoom(`group-${groupId}`);
-    };
-
-    const handleDisconnect = () => {
-      setIsSocketConnected(false);
-    };
-
-    const handleConnectError = (error) => {
-      console.error('Socket connection error:', error);
-      setIsSocketConnected(false);
-    };
-
-    // Set up connection event listeners
-    socketService.on('connect', handleConnect);
-    socketService.on('disconnect', handleDisconnect);
-    socketService.on('connect_error', handleConnectError);
-
-    // If already connected, join room immediately
-    if (socketService.isConnected()) {
-      handleConnect();
-    }
-
-    // Cleanup function
-    return () => {
-      socketService.leaveRoom(`group-${groupId}`);
-      socketService.off('connect', handleConnect);
-      socketService.off('disconnect', handleDisconnect);
-      socketService.off('connect_error', handleConnectError);
-    };
-  }, [groupId, token]);
-
-  // Real-time transaction updates
-  useEffect(() => {
-    if (!isSocketConnected || !groupId) return;
-
-    const handleTransactionUpdate = (data) => {
-      // Only process updates for this group
-      if (data.groupId !== groupId) {
-        return;
-      }
-
-      switch (data.type) {
-        case 'created':
-          setTransactions((prev) => {
-            // Check if transaction already exists to avoid duplicates
-            const exists = prev.some((t) => t._id === data.transaction._id);
-            if (exists) {
-              return prev;
-            }
-            return [data.transaction, ...prev];
-          });
-
-          // Update recent totals when new transaction is created
-          fetchRecentTotal();
-          break;
-
-        case 'updated':
-          setTransactions((prev) => {
-            return prev.map((t) =>
-              t._id === data.transaction._id ? data.transaction : t
-            );
-          });
-          break;
-
-        case 'deleted':
-          setTransactions((prev) => {
-            return prev.filter((t) => t._id !== data.transactionId);
-          });
-
-          // Update recent totals when transaction is deleted
-          fetchRecentTotal();
-          break;
-
-        default:
-      }
-
-      // Refetch balances when transactions change
-      fetchBalances();
-    };
-
-    const handleBalanceUpdate = (data) => {
-      if (data.groupId === groupId) {
-        setMemberBalances(data.balances);
-      }
-    };
-
-    const handleGroupSettled = (data) => {
-      if (data.groupId === groupId) {
-        fetchData();
-      }
-    };
-
-    // Listen for real-time events
-    socketService.on('transaction-update', handleTransactionUpdate);
-    socketService.on('balance-update', handleBalanceUpdate);
-    socketService.on('group-settled', handleGroupSettled);
-
-    // Cleanup
-    return () => {
-      socketService.off('transaction-update', handleTransactionUpdate);
-      socketService.off('balance-update', handleBalanceUpdate);
-      socketService.off('group-settled', handleGroupSettled);
-    };
-  }, [isSocketConnected, groupId]);
-
-  // Helper function to fetch recent total
-  const fetchRecentTotal = async () => {
+  // Memoized data fetching functions
+  const fetchRecentTotal = useCallback(async () => {
+    if (!groupId) return;
     try {
       const recentTotalData = await getRecentTotal(groupId);
       setRecentTotal(recentTotalData.totalAmount);
@@ -153,26 +47,25 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
     } catch (err) {
       console.error('Failed to fetch recent total:', err);
     }
-  };
+  }, [groupId]);
 
-  // Helper function to fetch balances
-  const fetchBalances = async () => {
+  const fetchBalances = useCallback(async () => {
+    if (!groupId) return;
     try {
       const balancesData = await getBalancesForGroup(groupId);
       setMemberBalances(balancesData);
     } catch (err) {
       console.error('Failed to fetch balances:', err);
     }
-  };
+  }, [groupId]);
 
-  // Helper function to fetch all data
-  const fetchData = async () => {
+  const fetchAllData = useCallback(async () => {
     if (!groupId) return;
 
     try {
       setLoading(true);
+      setError('');
 
-      // Fetch both transactions and balances
       const [transactionsData, balancesData, recentTotalData] =
         await Promise.all([
           getGroupTransactions(groupId),
@@ -190,39 +83,136 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Initial data fetch
-  useEffect(() => {
-    fetchData();
   }, [groupId]);
 
-  // Ensure allGroupMembers is not undefined and is an array
-  const validGroupMembers = Array.isArray(allGroupMembers)
-    ? allGroupMembers
-    : [];
+  // CONSOLIDATED EFFECT: Authentication, data fetching, and socket setup
+  useEffect(() => {
+    // Wait for auth to complete
+    if (authLoading) return;
 
-  // Get current user's balance from memberBalances
+    // Ensure user is logged in and we have a groupId
+    if (!isLoggedIn || !groupId || !token) {
+      setLoading(false);
+      return;
+    }
+
+    // Fetch initial data
+    fetchAllData();
+
+    // Setup socket connection
+    const socket = socketService.connect(token);
+
+    const handleConnect = () => {
+      setIsSocketConnected(true);
+      socketService.joinRoom(`group-${groupId}`);
+    };
+
+    const handleDisconnect = () => {
+      setIsSocketConnected(false);
+    };
+
+    const handleConnectError = (error) => {
+      console.error('Socket connection error:', error);
+      setIsSocketConnected(false);
+    };
+
+    const handleTransactionUpdate = (data) => {
+      if (data.groupId !== groupId) return;
+
+      switch (data.type) {
+        case 'created':
+          setTransactions((prev) => {
+            const exists = prev.some((t) => t._id === data.transaction._id);
+            if (exists) return prev;
+            return [data.transaction, ...prev];
+          });
+          fetchRecentTotal();
+          break;
+
+        case 'updated':
+          setTransactions((prev) =>
+            prev.map((t) =>
+              t._id === data.transaction._id ? data.transaction : t
+            )
+          );
+          break;
+
+        case 'deleted':
+          setTransactions((prev) =>
+            prev.filter((t) => t._id !== data.transactionId)
+          );
+          fetchRecentTotal();
+          break;
+
+        default:
+          break;
+      }
+      fetchBalances();
+    };
+
+    const handleBalanceUpdate = (data) => {
+      if (data.groupId === groupId) {
+        setMemberBalances(data.balances);
+      }
+    };
+
+    const handleGroupSettled = (data) => {
+      if (data.groupId === groupId) {
+        fetchAllData();
+      }
+    };
+
+    // Set up all socket event listeners
+    socketService.on('connect', handleConnect);
+    socketService.on('disconnect', handleDisconnect);
+    socketService.on('connect_error', handleConnectError);
+    socketService.on('transaction-update', handleTransactionUpdate);
+    socketService.on('balance-update', handleBalanceUpdate);
+    socketService.on('group-settled', handleGroupSettled);
+
+    // If already connected, join room immediately
+    if (socketService.isConnected()) {
+      handleConnect();
+    }
+
+    // Cleanup function
+    return () => {
+      socketService.leaveRoom(`group-${groupId}`);
+      socketService.off('connect', handleConnect);
+      socketService.off('disconnect', handleDisconnect);
+      socketService.off('connect_error', handleConnectError);
+      socketService.off('transaction-update', handleTransactionUpdate);
+      socketService.off('balance-update', handleBalanceUpdate);
+      socketService.off('group-settled', handleGroupSettled);
+    };
+  }, [
+    groupId,
+    token,
+    authLoading,
+    isLoggedIn,
+    fetchAllData,
+    fetchRecentTotal,
+    fetchBalances,
+  ]);
+
+  // Computed values
   const myBalance =
-    memberBalances.find((balance) => balance.memberId._id === user?.userId)
+    memberBalances.find((balance) => balance.memberId._id === user?.id)
       ?.balance || 0;
 
-  // Create a balances object for compatibility with existing code
   const balances = {};
   memberBalances.forEach((balance) => {
     balances[balance.memberId._id] = balance.balance;
   });
 
-  // Helper to find member username - enhanced to work with both sources
+  // Helper functions
   const getUsername = (userId) => {
-    // First try from memberBalances (populated with username)
     const memberBalance = memberBalances.find(
       (balance) => balance.memberId._id === userId
     );
     if (memberBalance) return memberBalance.memberId.username;
 
-    // Fallback to allGroupMembers
-    const member = validGroupMembers.find((m) => m._id === userId);
+    const member = allGroupMembers.find((m) => m._id === userId);
     return member?.username || 'Someone';
   };
 
@@ -238,31 +228,19 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
   };
 
   const getCategoryIcon = (category) => {
-    switch (category?.toLowerCase()) {
-      case 'rent/mortgage':
-        return '🏠';
-      case 'utilities':
-        return '⚡';
-      case 'groceries':
-        return '🛒';
-      case 'household':
-        return '🧽';
-      case 'date night':
-        return '💕';
-      case 'travel':
-        return '✈️';
-      case 'transportation':
-        return '🚗';
-      case 'medical':
-        return '🏥';
-      case 'gifts':
-        return '🎁';
-      case 'settlement':
-        return '💰';
-      case 'miscellaneous':
-      default:
-        return '📝';
-    }
+    const iconMap = {
+      'rent/mortgage': '🏠',
+      utilities: '⚡',
+      groceries: '🛒',
+      household: '🧽',
+      'date night': '💕',
+      travel: '✈️',
+      transportation: '🚗',
+      medical: '🏥',
+      gifts: '🎁',
+      settlement: '💰',
+    };
+    return iconMap[category?.toLowerCase()] || '📝';
   };
 
   const formatCurrency = (amount) => {
@@ -282,6 +260,14 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
       fontFamily:
         '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     },
+    loadingContainer: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '50vh',
+      flexDirection: 'column',
+      gap: '16px',
+    },
     header: {
       marginBottom: '32px',
       position: 'relative',
@@ -290,13 +276,12 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
       fontSize: '30px',
       fontWeight: 'bold',
       color: '#111827',
-      marginBottom: '8px',
       margin: 0,
     },
     subtitle: {
       color: '#6b7280',
       fontSize: '16px',
-      margin: 0,
+      margin: '8px 0 0 0',
     },
     connectionStatus: {
       position: 'absolute',
@@ -538,17 +523,6 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
       borderLeft: '4px solid #16a34a',
       boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
     },
-    settlementBadge: {
-      backgroundColor: '#16a34a',
-      color: 'white',
-      padding: '2px 8px',
-      borderRadius: '12px',
-      fontSize: '10px',
-      fontWeight: '600',
-      textTransform: 'uppercase',
-      letterSpacing: '0.5px',
-      marginLeft: '8px',
-    },
     settlementAmount: {
       color: '#16a34a',
       fontWeight: '700',
@@ -562,17 +536,6 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
       backgroundColor: '#fef3c7',
       borderLeft: '4px solid #f59e0b',
       boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-    },
-    owedToPurchaserBadge: {
-      backgroundColor: '#f59e0b',
-      color: 'white',
-      padding: '2px 8px',
-      borderRadius: '12px',
-      fontSize: '10px',
-      fontWeight: '600',
-      textTransform: 'uppercase',
-      letterSpacing: '0.5px',
-      marginLeft: '8px',
     },
     owedToPurchaserAmount: {
       color: '#d97706',
@@ -610,12 +573,28 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
     },
   };
 
+  // Loading states
+  if (authLoading) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.loadingContainer}>
+          <Loader size={48} color="#2563eb" className="animate-spin" />
+          <p style={styles.subtitle}>Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return null; // Parent should handle unauthenticated state
+  }
+
   if (loading) {
     return (
       <div style={styles.container}>
-        <div style={styles.header}>
-          <h1 style={styles.title}>Expense Tracker</h1>
-          <p style={styles.subtitle}>Loading...</p>
+        <div style={styles.loadingContainer}>
+          <Loader size={48} color="#2563eb" className="animate-spin" />
+          <p style={styles.subtitle}>Loading transactions...</p>
         </div>
       </div>
     );
@@ -623,11 +602,10 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
 
   return (
     <>
-      {/* Add BudgetAlertManager component */}
       <BudgetAlertManager groupId={groupId} />
 
       <div style={styles.container}>
-        {/* Header Section with Connection Status */}
+        {/* Header Section */}
         <div style={styles.header}>
           <h1 style={styles.title}>Expense Tracker</h1>
           <p style={styles.subtitle}>Track and manage your shared expenses</p>
@@ -645,7 +623,7 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
                 borderRadius: '50%',
                 animation: isSocketConnected ? 'pulse 2s infinite' : 'none',
               }}
-            ></span>
+            />
             {isSocketConnected ? 'Connected' : 'Disconnected'}
           </div>
         </div>
@@ -728,9 +706,7 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
                   </p>
                   <p style={{ margin: 0 }}>
                     {Object.entries(balances)
-                      .filter(
-                        ([userId, bal]) => bal < 0 && userId !== user?.userId
-                      )
+                      .filter(([userId, bal]) => bal < 0 && userId !== user?.id) // FIXED: using user.id
                       .map(([userId, bal]) => {
                         const username = getUsername(userId);
                         const amountOwed = Math.abs(bal);
@@ -756,9 +732,7 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
                   </p>
                   <p style={{ margin: 0 }}>
                     {Object.entries(balances)
-                      .filter(
-                        ([userId, bal]) => bal > 0 && userId !== user?.userId
-                      )
+                      .filter(([userId, bal]) => bal > 0 && userId !== user?.id) // FIXED: using user.id
                       .map(([userId, bal]) => {
                         const username = getUsername(userId);
                         const amountToPay = Math.abs(bal);
@@ -804,7 +778,7 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
               <div style={{ ...styles.statCard, ...styles.statCardOrange }}>
                 <div>
                   <p style={styles.statLabel}>
-                    Amount of transactions since last settlement
+                    Transactions Since Last Settlement
                   </p>
                   <p style={{ ...styles.statValue, color: '#ea580c' }}>
                     {recentSumTransactions}
@@ -834,7 +808,7 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
                   backgroundColor: '#dc2626',
                   borderRadius: '50%',
                 }}
-              ></span>
+              />
               {error}
             </div>
           )}
@@ -980,16 +954,6 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
                             <span style={styles.userName}>
                               {tx.paidBy?.username || 'Unknown'}
                             </span>
-                            {isOwedToPurchaser && (
-                              <span
-                                style={{
-                                  fontSize: '11px',
-                                  color: '#92400e',
-                                  fontWeight: '600',
-                                  marginLeft: '4px',
-                                }}
-                              ></span>
-                            )}
                           </div>
                         </td>
                         <td style={styles.tableCell}>
@@ -1011,7 +975,7 @@ const TransactionList = ({ groupId, members: allGroupMembers }) => {
           )}
         </div>
 
-        {/* Add connection pulse animation */}
+        {/* Pulse animation for connection status */}
         <style>
           {`
             @keyframes pulse {

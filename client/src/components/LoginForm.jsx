@@ -17,19 +17,21 @@ function LoginForm({
   inviteToken = null,
   groupName = null,
   onSuccess = null,
-  onJoinGroup = null, // Add this prop for join mode
-  error = null, // Add this prop to receive errors from parent
+  onJoinGroup = null,
+  error = null,
 }) {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
     password: '',
+    firstName: '', // Added for better user profiles
+    lastName: '', // Added for better user profiles
   });
   const [currentMode, setCurrentMode] = useState(
     mode === 'both' ? 'login' : mode
   );
   const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState(''); // "success" or "error"
+  const [messageType, setMessageType] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -46,16 +48,28 @@ function LoginForm({
 
   const handleInputChange = (field) => (e) => {
     setFormData((prev) => ({ ...prev, [field]: e.target.value }));
-    if (message) setMessage(''); // Clear message when user starts typing
+    if (message) setMessage('');
   };
 
   const handleRegister = async () => {
-    if (
-      !formData.username ||
-      !formData.password ||
-      (isRegisterMode && !formData.email)
-    ) {
-      setMessage('Please fill in all fields');
+    // Enhanced validation
+    if (!formData.username || !formData.password || !formData.email) {
+      setMessage('Username, email, and password are required');
+      setMessageType('error');
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setMessage('Please enter a valid email address');
+      setMessageType('error');
+      return;
+    }
+
+    // Password strength validation
+    if (formData.password.length < 6) {
+      setMessage('Password must be at least 6 characters long');
       setMessageType('error');
       return;
     }
@@ -63,9 +77,11 @@ function LoginForm({
     try {
       setLoading(true);
       const payload = {
-        username: formData.username,
+        username: formData.username.trim(),
+        email: formData.email.trim(),
         password: formData.password,
-        ...(isRegisterMode && { email: formData.email }),
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
       };
 
       const res = await API.post('/auth/register', payload);
@@ -73,11 +89,21 @@ function LoginForm({
       setMessage('Account created successfully!');
       setMessageType('success');
 
-      // Auto-login after registration
-      setTimeout(() => {
-        handleLogin();
-      }, 1000);
+      // Store token and user data
+      const { token, user } = res.data;
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      // Call onSuccess callback or navigate
+      if (onSuccess) {
+        onSuccess(token, user);
+      } else {
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1000);
+      }
     } catch (err) {
+      console.error('Registration error:', err);
       setMessage(err.response?.data?.error || 'Registration failed');
       setMessageType('error');
     } finally {
@@ -87,7 +113,7 @@ function LoginForm({
 
   const handleLogin = async () => {
     if (!formData.username || !formData.password) {
-      setMessage('Please enter username and password');
+      setMessage('Please enter username/email and password');
       setMessageType('error');
       return;
     }
@@ -95,20 +121,28 @@ function LoginForm({
     try {
       setLoading(true);
       const res = await API.post('/auth/login', {
-        username: formData.username,
+        username: formData.username.trim(),
         password: formData.password,
       });
 
-      const token = res.data.token;
+      const { token, user } = res.data;
       localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
 
       if (onSuccess) {
-        onSuccess(token);
+        onSuccess(token, user);
       } else {
         navigate('/dashboard');
       }
     } catch (err) {
-      setMessage(err.response?.data?.error || 'Login failed');
+      console.error('Login error:', err);
+
+      // Handle specific error cases
+      if (err.response?.status === 423) {
+        setMessage('Account temporarily locked. Please try again later.');
+      } else {
+        setMessage(err.response?.data?.error || 'Login failed');
+      }
       setMessageType('error');
     } finally {
       setLoading(false);
@@ -117,7 +151,7 @@ function LoginForm({
 
   const handleJoinGroup = async () => {
     if (!formData.username || !formData.email || !formData.password) {
-      setMessage('Please fill in all fields to join');
+      setMessage('Please fill in all required fields');
       setMessageType('error');
       return;
     }
@@ -125,24 +159,28 @@ function LoginForm({
     try {
       setLoading(true);
 
-      // If onJoinGroup prop is provided (from JoinGroupPage), use it
       if (onJoinGroup) {
-        // Pass the form data to the parent component's handler
         await onJoinGroup({
-          username: formData.username,
-          email: formData.email,
+          username: formData.username.trim(),
+          email: formData.email.trim(),
           password: formData.password,
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
         });
       } else {
-        // Otherwise, handle it directly (backward compatibility)
         const response = await API.post(`/groups/join/${inviteToken}`, {
-          username: formData.username,
-          email: formData.email,
+          username: formData.username.trim(),
+          email: formData.email.trim(),
           password: formData.password,
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
         });
 
         if (response.data.token) {
-          localStorage.setItem('token', response.data.token);
+          const { token, user } = response.data;
+          localStorage.setItem('token', token);
+          localStorage.setItem('user', JSON.stringify(user));
+
           setMessage('Account created and joined group successfully!');
           setMessageType('success');
 
@@ -152,6 +190,7 @@ function LoginForm({
         }
       }
     } catch (err) {
+      console.error('Join group error:', err);
       setMessage(err.response?.data?.error || 'Failed to join group');
       setMessageType('error');
     } finally {
@@ -159,6 +198,7 @@ function LoginForm({
     }
   };
 
+  // Styles remain the same as your original component
   const styles = {
     container: {
       display: 'flex',
@@ -233,6 +273,20 @@ function LoginForm({
       transform: 'translateY(-50%)',
       color: '#9ca3af',
     },
+    nameRow: {
+      display: 'flex',
+      gap: '12px',
+    },
+    nameInput: {
+      flex: 1,
+      padding: '12px 16px',
+      borderRadius: '8px',
+      border: '1px solid #d1d5db',
+      fontSize: '16px',
+      transition: 'all 0.2s ease',
+      outline: 'none',
+      fontFamily: 'inherit',
+    },
     buttonGroup: {
       display: 'flex',
       flexDirection: 'column',
@@ -260,11 +314,6 @@ function LoginForm({
       color: 'white',
       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
     },
-    secondaryButton: {
-      background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
-      color: '#374151',
-      border: '1px solid #d1d5db',
-    },
     joinButton: {
       background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
       color: 'white',
@@ -274,10 +323,6 @@ function LoginForm({
       background: '#9ca3af',
       cursor: 'not-allowed',
       transform: 'none',
-    },
-    buttonHover: {
-      transform: 'translateY(-1px)',
-      boxShadow: '0 8px 15px -3px rgba(0, 0, 0, 0.1)',
     },
     message: {
       padding: '12px 16px',
@@ -360,19 +405,52 @@ function LoginForm({
         </div>
 
         {isRegisterMode && (
-          <div style={styles.inputGroup}>
-            <Mail size={20} style={styles.inputIcon} />
-            <input
-              type="email"
-              placeholder="Email"
-              value={formData.email}
-              onChange={handleInputChange('email')}
-              style={styles.input}
-              onFocus={(e) => Object.assign(e.target.style, styles.inputFocus)}
-              onBlur={(e) => Object.assign(e.target.style, styles.input)}
-              disabled={loading}
-            />
-          </div>
+          <>
+            <div style={styles.inputGroup}>
+              <Mail size={20} style={styles.inputIcon} />
+              <input
+                type="email"
+                placeholder="Email"
+                value={formData.email}
+                onChange={handleInputChange('email')}
+                style={styles.input}
+                onFocus={(e) =>
+                  Object.assign(e.target.style, styles.inputFocus)
+                }
+                onBlur={(e) => Object.assign(e.target.style, styles.input)}
+                disabled={loading}
+                required
+              />
+            </div>
+
+            {/* Optional name fields */}
+            <div style={styles.nameRow}>
+              <input
+                type="text"
+                placeholder="First Name (optional)"
+                value={formData.firstName}
+                onChange={handleInputChange('firstName')}
+                style={styles.nameInput}
+                onFocus={(e) =>
+                  Object.assign(e.target.style, styles.inputFocus)
+                }
+                onBlur={(e) => Object.assign(e.target.style, styles.nameInput)}
+                disabled={loading}
+              />
+              <input
+                type="text"
+                placeholder="Last Name (optional)"
+                value={formData.lastName}
+                onChange={handleInputChange('lastName')}
+                style={styles.nameInput}
+                onFocus={(e) =>
+                  Object.assign(e.target.style, styles.inputFocus)
+                }
+                onBlur={(e) => Object.assign(e.target.style, styles.nameInput)}
+                disabled={loading}
+              />
+            </div>
+          </>
         )}
 
         <div style={styles.inputGroup}>
@@ -400,15 +478,6 @@ function LoginForm({
                 ...styles.joinButton,
                 ...(loading ? styles.buttonDisabled : {}),
               }}
-              onMouseEnter={(e) =>
-                !loading && Object.assign(e.target.style, styles.buttonHover)
-              }
-              onMouseLeave={(e) =>
-                Object.assign(e.target.style, {
-                  ...styles.button,
-                  ...styles.joinButton,
-                })
-              }
             >
               {loading ? (
                 <>
@@ -423,50 +492,39 @@ function LoginForm({
               )}
             </button>
           ) : mode === 'both' ? (
-            <>
-              <button
-                type="button"
-                onClick={currentMode === 'login' ? handleLogin : handleRegister}
-                disabled={loading}
-                style={{
-                  ...styles.button,
-                  ...styles.primaryButton,
-                  ...(loading ? styles.buttonDisabled : {}),
-                }}
-                onMouseEnter={(e) =>
-                  !loading && Object.assign(e.target.style, styles.buttonHover)
-                }
-                onMouseLeave={(e) =>
-                  Object.assign(e.target.style, {
-                    ...styles.button,
-                    ...styles.primaryButton,
-                  })
-                }
-              >
-                {loading ? (
-                  <>
-                    <div className="spinner" />
-                    {currentMode === 'login'
-                      ? 'Signing in...'
-                      : 'Creating account...'}
-                  </>
-                ) : (
-                  <>
-                    {currentMode === 'login' ? (
-                      <>
-                        <LogIn size={16} />
-                        Sign In
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus size={16} />
-                        Create Account
-                      </>
-                    )}
-                  </>
-                )}
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={currentMode === 'login' ? handleLogin : handleRegister}
+              disabled={loading}
+              style={{
+                ...styles.button,
+                ...styles.primaryButton,
+                ...(loading ? styles.buttonDisabled : {}),
+              }}
+            >
+              {loading ? (
+                <>
+                  <div className="spinner" />
+                  {currentMode === 'login'
+                    ? 'Signing in...'
+                    : 'Creating account...'}
+                </>
+              ) : (
+                <>
+                  {currentMode === 'login' ? (
+                    <>
+                      <LogIn size={16} />
+                      Sign In
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={16} />
+                      Create Account
+                    </>
+                  )}
+                </>
+              )}
+            </button>
           ) : currentMode === 'login' ? (
             <button
               type="button"

@@ -8,13 +8,23 @@ import { useParams } from 'react-router-dom';
 
 const BudgetsPage = () => {
   const { groupId } = useParams();
-  const { user } = useContext(AuthContext);
+  const { user, loading: authLoading, isLoggedIn } = useContext(AuthContext);
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchGroup = async () => {
+      // Wait for auth to finish loading
+      if (authLoading) return;
+
+      // Check if user is logged in
+      if (!isLoggedIn) {
+        setError('Please log in to access this page');
+        setLoading(false);
+        return;
+      }
+
       if (!groupId) {
         setError('No group selected');
         setLoading(false);
@@ -33,7 +43,7 @@ const BudgetsPage = () => {
     };
 
     fetchGroup();
-  }, [groupId]);
+  }, [groupId, authLoading, isLoggedIn]);
 
   const styles = {
     container: {
@@ -85,7 +95,8 @@ const BudgetsPage = () => {
     },
   };
 
-  if (loading) {
+  // Show loading while auth is initializing or while fetching group
+  if (authLoading || loading) {
     return (
       <div style={styles.container}>
         <div style={styles.centerContainer}>
@@ -94,14 +105,19 @@ const BudgetsPage = () => {
               <Loader size={48} className="animate-spin" />
             </div>
             <h2 style={styles.title}>Loading...</h2>
-            <p style={styles.text}>Please wait while we load your budgets</p>
+            <p style={styles.text}>
+              {authLoading
+                ? 'Checking authentication...'
+                : 'Please wait while we load your budgets'}
+            </p>
           </div>
         </div>
       </div>
     );
   }
 
-  if (error || !group) {
+  // Show error if not logged in or other errors
+  if (!isLoggedIn || error || !group) {
     return (
       <div style={styles.container}>
         <div style={styles.centerContainer}>
@@ -111,11 +127,19 @@ const BudgetsPage = () => {
             </div>
             <h2 style={styles.title}>Unable to Load</h2>
             <p style={styles.text}>
-              {error || "Group not found or you don't have access"}
+              {!isLoggedIn
+                ? 'Please log in to access this page'
+                : error || "Group not found or you don't have access"}
             </p>
             <button
               style={styles.retryButton}
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                if (!isLoggedIn) {
+                  window.location.href = '/login';
+                } else {
+                  window.location.reload();
+                }
+              }}
               onMouseEnter={(e) => {
                 e.target.style.transform = 'scale(1.05)';
               }}
@@ -123,7 +147,7 @@ const BudgetsPage = () => {
                 e.target.style.transform = 'scale(1)';
               }}
             >
-              Try Again
+              {!isLoggedIn ? 'Go to Login' : 'Try Again'}
             </button>
           </div>
         </div>

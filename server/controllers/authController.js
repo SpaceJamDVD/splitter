@@ -3,7 +3,27 @@ const User = require('../models/User');
 const Group = require('../models/Group');
 const jwt = require('jsonwebtoken');
 
+// Token blacklist (in-memory for now - we'll improve this later)
+const tokenBlacklist = new Set();
+
 class AuthController {
+  // Helper method to generate both access and refresh tokens
+  generateTokens(payload) {
+    const accessToken = jwt.sign(
+      { ...payload, type: 'access' },
+      process.env.JWT_ACCESS_SECRET, // New env variable
+      { expiresIn: '15m' } // Short-lived access token
+    );
+
+    const refreshToken = jwt.sign(
+      { ...payload, type: 'refresh' },
+      process.env.JWT_REFRESH_SECRET, // New env variable
+      { expiresIn: '7d' } // Long-lived refresh token
+    );
+
+    return { accessToken, refreshToken };
+  }
+
   // Register new user
   async register(req, res) {
     const { username, password, email, firstName, lastName } = req.body;
@@ -52,14 +72,19 @@ class AuthController {
         isEmailVerified: user.isEmailVerified,
       };
 
-      // Generate token
-      const token = jwt.sign(payload, process.env.JWT_SECRET, {
-        expiresIn: '7d',
+      // Generate both tokens
+      const { accessToken, refreshToken } = this.generateTokens(payload);
+
+      console.log('🔐 New user registered - tokens generated:', {
+        userId: user._id,
+        accessTokenLength: accessToken.length,
+        refreshTokenLength: refreshToken.length,
       });
 
       res.status(201).json({
         message: 'User created successfully',
-        token,
+        accessToken, // Short-lived token for API requests
+        refreshToken, // Long-lived token for getting new access tokens
         user: {
           id: user._id,
           username: user.username,
@@ -157,13 +182,19 @@ class AuthController {
         plan: user.subscription.plan,
       };
 
-      // Generate token
-      const token = jwt.sign(payload, process.env.JWT_SECRET, {
-        expiresIn: '7d',
+      // Generate both tokens
+      const { accessToken, refreshToken } = this.generateTokens(payload);
+
+      console.log('🔑 User logged in - tokens generated:', {
+        userId: user._id,
+        username: user.username,
+        accessTokenExpiry: '15 minutes',
+        refreshTokenExpiry: '7 days',
       });
 
       res.json({
-        token,
+        accessToken, // Short-lived token
+        refreshToken, // Long-lived token
         user: {
           id: user._id,
           username: user.username,
@@ -182,7 +213,95 @@ class AuthController {
     }
   }
 
-  // Verify token
+  // NEW: Refresh token endpoint
+  async refreshToken(req, res) {
+    try {
+      const { refreshToken } = req.body;
+
+      if (!refreshToken) {
+        return res.status(401).json({ error: 'Refresh token required' });
+      }
+
+      // Check if token is blacklisted
+      if (tokenBlacklist.has(refreshToken)) {
+        console.log('🚫 Attempted use of blacklisted refresh token');
+        return res.status(401).json({ error: 'Invalid refresh token' });
+      }
+
+      // Verify refresh token
+      const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+
+      // Make sure it's actually a refresh token
+      if (decoded.type !== 'refresh') {
+        return res.status(401).json({ error: 'Invalid token type' });
+      }
+
+      // Find user to make sure they still exist and are active
+      const user = await User.findById(decoded.userId);
+      if (!user || !user.isActive) {
+        return res.status(401).json({ error: 'User not found or inactive' });
+      }
+
+      // Get fresh user data for new token
+      const userGroups = await Group.find({ members: user._id });
+      const primaryGroupId = userGroups.length > 0 ? userGroups[0]._id : null;
+
+      // Create new payload with fresh data
+      const payload = {
+        userId: user._id,
+        username: user.username,
+        email: user.email,
+        groupId: primaryGroupId,
+        isEmailVerified: user.isEmailVerified,
+        plan: user.subscription.plan,
+      };
+
+      // Generate new access token (keep same refresh token)
+      const newAccessToken = jwt.sign(
+        { ...payload, type: 'access' },
+        process.env.JWT_ACCESS_SECRET,
+        { expiresIn: '15m' }
+      );
+
+      console.log('🔄 Token refreshed for user:', {
+        userId: user._id,
+        username: user.username,
+        newTokenExpiry: '15 minutes',
+      });
+
+      res.json({
+        accessToken: newAccessToken,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          fullName: user.profile.fullName,
+          avatar: user.profile.avatar,
+          isEmailVerified: user.isEmailVerified,
+          plan: user.subscription.plan,
+          groupId: primaryGroupId,
+          preferences: user.preferences,
+        },
+      });
+    } catch (err) {
+      console.error('Token refresh error:', err);
+
+      if (err.name === 'TokenExpiredError') {
+        return res.status(401).json({
+          error: 'Refresh token expired',
+          code: 'REFRESH_TOKEN_EXPIRED',
+        });
+      }
+
+      if (err.name === 'JsonWebTokenError') {
+        return res.status(401).json({ error: 'Invalid refresh token' });
+      }
+
+      res.status(500).json({ error: 'Token refresh failed' });
+    }
+  }
+
+  // Verify token (updated to work with access tokens)
   async verifyToken(req, res) {
     try {
       const user = await User.findById(req.user.userId);
@@ -299,9 +418,20 @@ class AuthController {
     }
   }
 
-  // Logout (server-side token blacklisting would go here if needed)
+  // Logout (now with token blacklisting)
   async logout(req, res) {
     try {
+      const { refreshToken } = req.body;
+
+      // Add refresh token to blacklist if provided
+      if (refreshToken) {
+        tokenBlacklist.add(refreshToken);
+        console.log('🚪 User logged out - refresh token blacklisted');
+      }
+
+      // Note: We can't blacklist access tokens easily since they're short-lived
+      // The 15-minute expiry provides reasonable security
+
       res.json({
         message: 'Logged out successfully',
       });
@@ -331,6 +461,14 @@ class AuthController {
       console.error('Account deletion error:', err);
       res.status(500).json({ error: 'Account deletion failed' });
     }
+  }
+
+  // Helper method to get blacklist status (for debugging)
+  getBlacklistInfo(req, res) {
+    res.json({
+      blacklistedTokensCount: tokenBlacklist.size,
+      // Don't return actual tokens for security
+    });
   }
 }
 

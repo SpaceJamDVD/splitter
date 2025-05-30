@@ -116,7 +116,7 @@ const LandingPage = () => {
 
           <nav style={styles.nav}>
             <a
-              href="/login"
+              href="/register"
               style={styles.ctaButton}
               onMouseEnter={(e) => {
                 e.target.style.transform = 'scale(1.05)';
@@ -143,7 +143,7 @@ const LandingPage = () => {
 
         {/* Mobile Menu */}
         <div style={styles.mobileMenu}>
-          <a href="/login" style={styles.mobileNavLink}>
+          <a href="/register" style={styles.mobileNavLink}>
             Get Started
           </a>
         </div>
@@ -151,8 +151,6 @@ const LandingPage = () => {
 
       {/* Hero Section */}
       <HeroSection />
-
-      {/* Placeholder for other sections */}
     </div>
   );
 };

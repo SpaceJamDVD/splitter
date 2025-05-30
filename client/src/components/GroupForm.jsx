@@ -13,7 +13,7 @@ import {
   Check,
 } from 'lucide-react';
 
-const OnboardingGroupForm = ({ onSuccess }) => {
+const GroupForm = ({ onSuccess }) => {
   const { user } = useContext(AuthContext);
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
@@ -534,4 +534,4 @@ const OnboardingGroupForm = ({ onSuccess }) => {
   return null;
 };
 
-export default OnboardingGroupForm;
+export default GroupForm;

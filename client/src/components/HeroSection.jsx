@@ -168,7 +168,7 @@ const HeroSection = () => {
 
         <div style={styles.heroButtons}>
           <a
-            href="/login"
+            href="/register"
             style={styles.primaryButton}
             onMouseEnter={(e) => {
               e.target.style.transform = 'translateY(-2px)';

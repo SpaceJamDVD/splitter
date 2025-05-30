@@ -5,6 +5,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const requireAuth = require('./middleware/requireAuth');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 const server = require('http').createServer(app);
@@ -27,6 +28,8 @@ app.use(
 
 // Body parsing
 app.use(express.json());
+
+app.use(cookieParser());
 
 // Connect to MongoDB
 mongoose

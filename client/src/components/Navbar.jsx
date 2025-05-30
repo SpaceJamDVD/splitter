@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { NavLink } from 'react-router-dom';
-import { logout } from '../api.js';
 import { AuthContext } from '../contexts/AuthContext.jsx';
 import {
   FaHome,
@@ -227,9 +226,7 @@ const Navbar = () => {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-  };
+  const handleLogout = () => {};
 
   return (
     <>

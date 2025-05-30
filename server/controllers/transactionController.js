@@ -266,9 +266,6 @@ class TransactionController {
       // Delete the transaction
       await Transaction.findByIdAndDelete(id);
 
-      // Recalculate balances for the group (you might want to implement this)
-      // await this.recalculateGroupBalances(groupId);
-
       // ========== SOCKET.IO IMPLEMENTATION ==========
 
       const io = req.app.get('io');

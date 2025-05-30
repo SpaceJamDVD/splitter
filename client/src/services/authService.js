@@ -2,6 +2,11 @@
 import API from '../api';
 
 class AuthService {
+  constructor() {
+    // Note: No token storage needed - server manages httpOnly cookies
+    // No isRefreshing or failedQueue needed - api.js handles this
+  }
+
   // Register new user
   async register(userData) {
     try {
@@ -13,13 +18,19 @@ class AuthService {
         lastName: userData.lastName?.trim(),
       });
 
+      // Server automatically sets httpOnly cookies
+      // No need to store tokens manually!
+      this.storeUserData(response.data.user);
+
+      console.log('🎉 Registration successful - cookies set by server');
+
       return {
         success: true,
-        data: response.data,
-        token: response.data.token,
         user: response.data.user,
+        message: 'Registration successful',
       };
     } catch (error) {
+      console.error('❌ Registration failed:', error.response?.data);
       return {
         success: false,
         error: error.response?.data?.error || 'Registration failed',
@@ -35,13 +46,20 @@ class AuthService {
         password: credentials.password,
       });
 
+      // Server automatically sets httpOnly cookies
+      // No need to store tokens manually!
+      this.storeUserData(response.data.user);
+
+      console.log('🔑 Login successful - cookies set by server');
+
       return {
         success: true,
-        data: response.data,
-        token: response.data.token,
         user: response.data.user,
+        message: 'Login successful',
       };
     } catch (error) {
+      console.error('❌ Login failed:', error.response?.data);
+
       let errorMessage = 'Login failed';
 
       if (error.response?.status === 423) {
@@ -60,16 +78,28 @@ class AuthService {
     }
   }
 
-  // Verify current token
+  // Verify current session (server-side verification only)
   async verifyToken() {
     try {
       const response = await API.get('/auth/verify');
+
+      // Update stored user data with fresh server data
+      if (response.data.user) {
+        this.storeUserData(response.data.user);
+      }
+
       return {
         success: true,
         valid: response.data.valid,
         user: response.data.user,
       };
     } catch (error) {
+      console.error('❌ Token verification failed:', error.response?.data);
+
+      // Note: api.js automatically handles token refresh on 401 TOKEN_EXPIRED
+      // So if we get here, either refresh worked (and this is a different error)
+      // or refresh failed (and user should be logged out)
+
       return {
         success: false,
         valid: false,
@@ -87,6 +117,9 @@ class AuthService {
         timezone: profileData.timezone,
         currency: profileData.currency,
       });
+
+      // Update stored user data
+      this.storeUserData(response.data.user);
 
       return {
         success: true,
@@ -108,6 +141,13 @@ class AuthService {
         preferences,
       });
 
+      // Update stored user with new preferences
+      const currentUser = this.getCurrentUser();
+      if (currentUser) {
+        currentUser.preferences = response.data.preferences;
+        this.storeUserData(currentUser);
+      }
+
       return {
         success: true,
         preferences: response.data.preferences,
@@ -124,26 +164,24 @@ class AuthService {
   // Logout user
   async logout() {
     try {
+      // Tell server to clear httpOnly cookies and blacklist refresh token
       await API.post('/auth/logout');
 
-      // Clear local storage
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-
-      return {
-        success: true,
-        message: 'Logged out successfully',
-      };
+      console.log('🚪 Server logout successful - cookies cleared');
     } catch (error) {
-      // Even if server logout fails, clear local data
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-
-      return {
-        success: true, // Still consider it successful
-        message: 'Logged out locally',
-      };
+      console.error(
+        '⚠️  Server logout failed, clearing local data anyway:',
+        error
+      );
     }
+
+    // Always clear local user data, even if server logout fails
+    this.clearUserData();
+
+    return {
+      success: true,
+      message: 'Logged out successfully',
+    };
   }
 
   // Delete user account (soft delete)
@@ -152,8 +190,7 @@ class AuthService {
       const response = await API.delete('/auth/account');
 
       // Clear local storage after account deletion
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      this.clearUserData();
 
       return {
         success: true,
@@ -167,6 +204,28 @@ class AuthService {
     }
   }
 
+  // =============================================================================
+  // USER DATA STORAGE (Non-sensitive data only)
+  // =============================================================================
+
+  // Store user data (only non-sensitive info for offline access)
+  storeUserData(user) {
+    // Only store essential, non-sensitive user data for offline access
+    const safeUserData = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      fullName: user.fullName,
+      isEmailVerified: user.isEmailVerified,
+      plan: user.plan,
+      // Store preferences for offline access (user settings, UI preferences, etc.)
+      preferences: user.preferences,
+    };
+
+    localStorage.setItem('user', JSON.stringify(safeUserData));
+    console.log('👤 User data stored (non-sensitive only)');
+  }
+
   // Get current user from localStorage
   getCurrentUser() {
     try {
@@ -178,16 +237,38 @@ class AuthService {
     }
   }
 
-  // Get current token from localStorage
-  getCurrentToken() {
-    return localStorage.getItem('token');
+  // Clear user data (but not auth cookies - server handles those)
+  clearUserData() {
+    localStorage.removeItem('user');
+    console.log('🧹 User data cleared');
   }
 
-  // Check if user is logged in
+  // =============================================================================
+  // AUTHENTICATION STATE METHODS (Simplified)
+  // =============================================================================
+
+  // Check if user is logged in (based on stored user data)
+  // Note: This is just a quick check - real auth is server-side via cookies
   isLoggedIn() {
-    const token = this.getCurrentToken();
     const user = this.getCurrentUser();
-    return !!(token && user);
+    return !!user;
+  }
+
+  // More reliable auth check - calls server to verify cookies
+  async checkAuthStatus() {
+    try {
+      const response = await API.get('/auth/verify');
+      return {
+        isAuthenticated: true,
+        user: response.data.user,
+      };
+    } catch (error) {
+      return {
+        isAuthenticated: false,
+        user: null,
+        error: error.response?.data?.error,
+      };
+    }
   }
 
   // Check if user has specific feature/plan
@@ -215,16 +296,27 @@ class AuthService {
     return path.split('.').reduce((obj, key) => obj?.[key], user.preferences);
   }
 
-  // Store user data in localStorage
-  storeUserData(token, user) {
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
+  // For components that might still call these old methods
+  getAccessToken() {
+    console.warn('⚠️  getAccessToken() not needed with httpOnly cookies');
+    return null; // httpOnly cookies can't be accessed by JavaScript
   }
 
-  // Clear all auth data
+  getRefreshToken() {
+    console.warn('⚠️  getRefreshToken() not needed with httpOnly cookies');
+    return null; // httpOnly cookies can't be accessed by JavaScript
+  }
+
+  // For AuthContext backward compatibility
+  getCurrentToken() {
+    console.warn('⚠️  getCurrentToken() deprecated - using httpOnly cookies');
+    return null;
+  }
+
+  // Clear everything (for compatibility)
   clearAuthData() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    console.warn('⚠️  clearAuthData() deprecated - use clearUserData()');
+    this.clearUserData();
   }
 }
 

@@ -30,7 +30,7 @@ function RegisterForm({
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Get login function from AuthContext (updated signature)
+  // Get login function from AuthContext
   const { login: authLogin } = useContext(AuthContext);
 
   // Display error from parent component if provided

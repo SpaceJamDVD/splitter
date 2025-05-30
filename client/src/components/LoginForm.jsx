@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Lock, LogIn, AlertCircle, Heart } from 'lucide-react';
 import { AuthContext } from '../contexts/AuthContext';
-import API from '../api';
+import authService from '../services/authService';
 
 function LoginForm({
   onSuccess = null,
@@ -18,7 +18,7 @@ function LoginForm({
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Get login function from AuthContext
+  // Get login function from AuthContext (updated signature)
   const { login: authLogin } = useContext(AuthContext);
 
   // Display error from parent component if provided
@@ -35,6 +35,7 @@ function LoginForm({
   };
 
   const handleLogin = async () => {
+    // Basic validation
     if (!formData.username || !formData.password) {
       setMessage('Please enter username/email and password');
       setMessageType('error');
@@ -43,30 +44,46 @@ function LoginForm({
 
     try {
       setLoading(true);
-      const res = await API.post('/auth/login', {
-        username: formData.username.trim(),
+
+      console.log('🎯 Starting login process...');
+
+      // Use authService instead of direct API call
+      const result = await authService.login({
+        username: formData.username,
         password: formData.password,
       });
 
-      const { token, user } = res.data;
+      if (result.success) {
+        console.log('✅ Login successful via authService');
 
-      // Use AuthContext login method instead of setting localStorage directly
-      authLogin(token, user);
+        // NEW: authLogin only takes user data (no tokens!)
+        // Server already set httpOnly cookies automatically
+        await authLogin(result.user);
 
-      if (onSuccess) {
-        onSuccess(token, user);
+        console.log('✅ User logged into AuthContext');
+
+        // Call onSuccess callback or navigate
+        if (onSuccess) {
+          // Updated callback - no token parameter
+          onSuccess(result.user);
+        } else {
+          navigate('/dashboard');
+        }
       } else {
-        navigate('/dashboard');
+        // Handle login failure
+        console.error('❌ Login failed:', result.error);
+
+        // Handle specific error cases
+        if (result.isLocked) {
+          setMessage('Account temporarily locked. Please try again later.');
+        } else {
+          setMessage(result.error);
+        }
+        setMessageType('error');
       }
     } catch (err) {
-      console.error('Login error:', err);
-
-      // Handle specific error cases
-      if (err.response?.status === 423) {
-        setMessage('Account temporarily locked. Please try again later.');
-      } else {
-        setMessage(err.response?.data?.error || 'Login failed');
-      }
+      console.error('❌ Login error:', err);
+      setMessage('Login failed. Please try again.');
       setMessageType('error');
     } finally {
       setLoading(false);
@@ -215,13 +232,14 @@ function LoginForm({
           <User size={20} style={styles.inputIcon} />
           <input
             type="text"
-            placeholder="Username"
+            placeholder="Username or Email"
             value={formData.username}
             onChange={handleInputChange('username')}
             style={styles.input}
             onFocus={(e) => Object.assign(e.target.style, styles.inputFocus)}
             onBlur={(e) => Object.assign(e.target.style, styles.input)}
             disabled={loading}
+            autoComplete="username"
           />
         </div>
 
@@ -236,6 +254,7 @@ function LoginForm({
             onFocus={(e) => Object.assign(e.target.style, styles.inputFocus)}
             onBlur={(e) => Object.assign(e.target.style, styles.input)}
             disabled={loading}
+            autoComplete="current-password"
           />
         </div>
 

@@ -10,7 +10,7 @@ import {
   Heart,
 } from 'lucide-react';
 import { AuthContext } from '../contexts/AuthContext';
-import API from '../api';
+import authService from '../services/authService'; // Import authService
 
 function RegisterForm({
   onSuccess = null,
@@ -30,7 +30,7 @@ function RegisterForm({
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Get login function from AuthContext
+  // Get login function from AuthContext (updated signature)
   const { login: authLogin } = useContext(AuthContext);
 
   // Display error from parent component if provided
@@ -71,40 +71,55 @@ function RegisterForm({
 
     try {
       setLoading(true);
-      const payload = {
-        username: formData.username.trim(),
-        email: formData.email.trim(),
+
+      console.log('🎯 Starting registration process...');
+
+      // Use authService instead of direct API call
+      const result = await authService.register({
+        username: formData.username,
+        email: formData.email,
         password: formData.password,
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-      };
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+      });
 
-      const res = await API.post('/auth/register', payload);
+      if (result.success) {
+        console.log('✅ Registration successful via authService');
 
-      setMessage('Account created successfully!');
-      setMessageType('success');
+        setMessage('Account created successfully!');
+        setMessageType('success');
 
-      // Use AuthContext login method instead of setting localStorage directly
-      const { token, user } = res.data;
-      authLogin(token, user);
+        // NEW: authLogin only takes user data (no tokens!)
+        // Server already set httpOnly cookies automatically
+        await authLogin(result.user);
 
-      // Call onSuccess callback or navigate
-      if (onSuccess) {
-        onSuccess(token, user);
+        console.log('✅ User logged into AuthContext');
+
+        // Call onSuccess callback or navigate
+        if (onSuccess) {
+          // Updated callback - no token parameter
+          onSuccess(result.user);
+        } else {
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 1000);
+        }
       } else {
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 1000);
+        // Handle registration failure
+        console.error('❌ Registration failed:', result.error);
+        setMessage(result.error);
+        setMessageType('error');
       }
     } catch (err) {
-      console.error('Registration error:', err);
-      setMessage(err.response?.data?.error || 'Registration failed');
+      console.error('❌ Registration error:', err);
+      setMessage('Registration failed. Please try again.');
       setMessageType('error');
     } finally {
       setLoading(false);
     }
   };
 
+  // ... rest of your styles object remains the same ...
   const styles = {
     container: {
       display: 'flex',
@@ -267,7 +282,7 @@ function RegisterForm({
         </h1>
         <p style={styles.subtitle}>
           {groupName
-            ? `You’ve been invited to join the group “${groupName}”. Create an account to continue.`
+            ? `You've been invited to join the group "${groupName}". Create an account to continue.`
             : 'Start tracking your shared expenses'}
         </p>
       </div>

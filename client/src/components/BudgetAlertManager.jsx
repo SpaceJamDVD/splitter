@@ -9,7 +9,7 @@ const BudgetAlertManager = ({ groupId }) => {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    if (!groupId || !token) return;
+    if (!groupId) return;
 
     // Connect to socket and join group room
     const socket = socketService.connect(token);

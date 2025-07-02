@@ -91,7 +91,7 @@ const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
     if (authLoading) return;
 
     // Ensure user is logged in and we have a groupId
-    if (!isLoggedIn || !groupId || !token) {
+    if (!isLoggedIn || !groupId) {
       setLoading(false);
       return;
     }

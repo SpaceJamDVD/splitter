@@ -14,65 +14,44 @@ export const AuthProvider = ({ children }) => {
 
   const initializeAuth = async () => {
     try {
-      console.log('🔄 Initializing auth state...');
-
       // Check if we have stored user data (quick check)
       const hasStoredUser = !!authService.getCurrentUser();
-
-      console.log('📊 Auth state check:', {
-        hasStoredUser,
-        cookieNote: 'Tokens are in httpOnly cookies (invisible to JS)',
-      });
 
       // If we have stored user data, set it temporarily
       if (hasStoredUser) {
         const storedUser = authService.getCurrentUser();
         setUser(storedUser);
-        console.log('👤 Loaded stored user data:', storedUser.username);
       }
 
       // Try to verify current session with server (checks httpOnly cookies)
       try {
-        console.log('🔍 Verifying session with server...');
         const verificationResult = await authService.verifyToken();
 
         if (verificationResult.success && verificationResult.user) {
-          console.log('✅ Session verification successful');
           setUser(verificationResult.user);
         } else {
-          console.log('❌ Session verification failed');
           // Clear user data if verification fails
           await logout();
         }
       } catch (error) {
-        console.error('❌ Session verification error:', error);
-
-        // If server can't verify cookies, user is not authenticated
-        console.log('🚪 Could not verify authentication cookies');
         await logout();
       }
     } catch (error) {
-      console.error('❌ Auth initialization error:', error);
       await logout();
     } finally {
       setLoading(false);
-      console.log('✅ Auth initialization complete');
     }
   };
 
   // Simplified login method for cookie-based auth
   const login = async (userData) => {
     try {
-      console.log('🔑 Logging in user with cookie-based auth');
-
       // Store user data locally (server already set httpOnly cookies)
       if (userData) {
         authService.storeUserData(userData);
         setUser(userData);
-        console.log('👤 User logged in:', userData.username);
       } else {
         // If no user data provided, fetch it from server
-        console.log('📡 Fetching fresh user data from server...');
         const verificationResult = await authService.verifyToken();
         if (verificationResult.success && verificationResult.user) {
           setUser(verificationResult.user);
@@ -86,7 +65,6 @@ export const AuthProvider = ({ children }) => {
         })
       );
     } catch (error) {
-      console.error('❌ Login error:', error);
       await logout();
     }
   };
@@ -94,12 +72,9 @@ export const AuthProvider = ({ children }) => {
   // Updated logout method
   const logout = async () => {
     try {
-      console.log('🚪 Logging out user...');
-
       // Call server logout (clears httpOnly cookies and blacklists refresh token)
       await authService.logout();
     } catch (error) {
-      console.error('⚠️  Server logout failed:', error);
       // Continue with local logout even if server fails
     }
 
@@ -108,14 +83,10 @@ export const AuthProvider = ({ children }) => {
 
     // Emit logout event for other parts of the app
     window.dispatchEvent(new CustomEvent('auth:logout'));
-
-    console.log('✅ Logout complete');
   };
 
   // Update user data (for profile updates, etc.)
   const updateUser = (updatedUserData) => {
-    console.log('📝 Updating user data');
-
     const newUserData = { ...user, ...updatedUserData };
     authService.storeUserData(newUserData);
     setUser(newUserData);
@@ -124,28 +95,21 @@ export const AuthProvider = ({ children }) => {
   // Refresh user data from server
   const refreshUserData = async () => {
     if (!authService.isLoggedIn()) {
-      console.log('❌ Cannot refresh user data - not logged in');
       return user;
     }
 
     try {
-      console.log('🔄 Refreshing user data from server...');
       const verificationResult = await authService.verifyToken();
 
       if (verificationResult.success && verificationResult.user) {
-        console.log('✅ User data refreshed');
         setUser(verificationResult.user);
         return verificationResult.user;
       }
 
-      console.log('⚠️  User data refresh failed, keeping current data');
       return user;
     } catch (error) {
-      console.error('❌ Failed to refresh user data:', error);
-
       // If authentication failed completely, logout user
       if (error.response?.status === 401) {
-        console.log('🚪 Authentication failed during user data refresh');
         await logout();
         return null;
       }
@@ -196,7 +160,6 @@ export const AuthProvider = ({ children }) => {
         return false;
       }
     } catch (error) {
-      console.error('❌ Server auth check failed:', error);
       setUser(null);
       return false;
     }

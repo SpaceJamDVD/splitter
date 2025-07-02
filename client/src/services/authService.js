@@ -22,15 +22,12 @@ class AuthService {
       // No need to store tokens manually!
       this.storeUserData(response.data.user);
 
-      console.log('🎉 Registration successful - cookies set by server');
-
       return {
         success: true,
         user: response.data.user,
         message: 'Registration successful',
       };
     } catch (error) {
-      console.error('❌ Registration failed:', error.response?.data);
       return {
         success: false,
         error: error.response?.data?.error || 'Registration failed',
@@ -50,16 +47,12 @@ class AuthService {
       // No need to store tokens manually!
       this.storeUserData(response.data.user);
 
-      console.log('🔑 Login successful - cookies set by server');
-
       return {
         success: true,
         user: response.data.user,
         message: 'Login successful',
       };
     } catch (error) {
-      console.error('❌ Login failed:', error.response?.data);
-
       let errorMessage = 'Login failed';
 
       if (error.response?.status === 423) {
@@ -94,8 +87,6 @@ class AuthService {
         user: response.data.user,
       };
     } catch (error) {
-      console.error('❌ Token verification failed:', error.response?.data);
-
       // Note: api.js automatically handles token refresh on 401 TOKEN_EXPIRED
       // So if we get here, either refresh worked (and this is a different error)
       // or refresh failed (and user should be logged out)
@@ -166,14 +157,7 @@ class AuthService {
     try {
       // Tell server to clear httpOnly cookies and blacklist refresh token
       await API.post('/auth/logout');
-
-      console.log('🚪 Server logout successful - cookies cleared');
-    } catch (error) {
-      console.error(
-        '⚠️  Server logout failed, clearing local data anyway:',
-        error
-      );
-    }
+    } catch (error) {}
 
     // Always clear local user data, even if server logout fails
     this.clearUserData();
@@ -223,7 +207,6 @@ class AuthService {
     };
 
     localStorage.setItem('user', JSON.stringify(safeUserData));
-    console.log('👤 User data stored (non-sensitive only)');
   }
 
   // Get current user from localStorage
@@ -232,7 +215,6 @@ class AuthService {
       const user = localStorage.getItem('user');
       return user ? JSON.parse(user) : null;
     } catch (error) {
-      console.error('Error parsing stored user data:', error);
       return null;
     }
   }
@@ -240,7 +222,6 @@ class AuthService {
   // Clear user data (but not auth cookies - server handles those)
   clearUserData() {
     localStorage.removeItem('user');
-    console.log('🧹 User data cleared');
   }
 
   // =============================================================================
@@ -298,24 +279,20 @@ class AuthService {
 
   // For components that might still call these old methods
   getAccessToken() {
-    console.warn('⚠️  getAccessToken() not needed with httpOnly cookies');
     return null; // httpOnly cookies can't be accessed by JavaScript
   }
 
   getRefreshToken() {
-    console.warn('⚠️  getRefreshToken() not needed with httpOnly cookies');
     return null; // httpOnly cookies can't be accessed by JavaScript
   }
 
   // For AuthContext backward compatibility
   getCurrentToken() {
-    console.warn('⚠️  getCurrentToken() deprecated - using httpOnly cookies');
     return null;
   }
 
   // Clear everything (for compatibility)
   clearAuthData() {
-    console.warn('⚠️  clearAuthData() deprecated - use clearUserData()');
     this.clearUserData();
   }
 }

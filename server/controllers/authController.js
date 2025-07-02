@@ -92,12 +92,6 @@ const register = async (req, res) => {
     res.cookie('accessToken', accessToken, COOKIE_OPTIONS);
     res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
 
-    console.log('🔐 User registered - httpOnly cookies set:', {
-      userId: user._id,
-      username: user.username,
-      cookiesSet: ['accessToken', 'refreshToken'],
-    });
-
     // Return user data only (NO TOKENS in response body)
     res.status(201).json({
       message: 'User created successfully',
@@ -198,13 +192,6 @@ const login = async (req, res) => {
     res.cookie('accessToken', accessToken, COOKIE_OPTIONS);
     res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
 
-    console.log('🔑 User logged in - httpOnly cookies set:', {
-      userId: user._id,
-      username: user.username,
-      accessTokenExpiry: '15 minutes',
-      refreshTokenExpiry: '7 days',
-    });
-
     // Return user data only (NO TOKENS in response body)
     res.json({
       user: {
@@ -237,7 +224,6 @@ const refreshToken = async (req, res) => {
 
     // Check if token is blacklisted
     if (tokenBlacklist.has(refreshToken)) {
-      console.log('🚫 Attempted use of blacklisted refresh token');
       return res.status(401).json({ error: 'Invalid refresh token' });
     }
 
@@ -277,11 +263,6 @@ const refreshToken = async (req, res) => {
 
     // Set new access token cookie
     res.cookie('accessToken', newAccessToken, COOKIE_OPTIONS);
-
-    console.log('🔄 Token refreshed via cookie:', {
-      userId: user._id,
-      username: user.username,
-    });
 
     // Return fresh user data (NO TOKEN in response body)
     res.json({
@@ -439,14 +420,11 @@ const logout = async (req, res) => {
     // Add refresh token to blacklist
     if (refreshToken) {
       tokenBlacklist.add(refreshToken);
-      console.log('🚪 Refresh token blacklisted during logout');
     }
 
     // Clear both cookies
     res.clearCookie('accessToken', { path: '/' });
     res.clearCookie('refreshToken', { path: '/api/auth/refresh' });
-
-    console.log('🚪 User logged out - cookies cleared');
 
     res.json({
       message: 'Logged out successfully',

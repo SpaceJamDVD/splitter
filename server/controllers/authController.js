@@ -4,7 +4,7 @@ const Group = require('../models/Group');
 const jwt = require('jsonwebtoken');
 const { tokenBlacklist } = require('../middleware/tokenStore');
 const isProduction = process.env.NODE_ENV === 'production';
-const ACCESS_TOKEN_EXPIRY = isProduction ? '15m' : '30s';
+const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
 
 // Cookie configuration
@@ -12,9 +12,7 @@ const COOKIE_OPTIONS = {
   httpOnly: true, // Cannot be accessed by JavaScript
   secure: isProduction, // HTTPS only in production
   sameSite: isProduction ? 'strict' : 'lax', // CSRF protection
-  maxAge: isProduction
-    ? 15 * 60 * 1000 // 15 minutes
-    : 30 * 1000, // 30 seconds
+  maxAge: 15 * 60 * 1000, // 15 minutes
   path: '/',
 };
 

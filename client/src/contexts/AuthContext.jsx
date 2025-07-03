@@ -72,7 +72,6 @@ export const AuthProvider = ({ children }) => {
   // Updated logout method
   const logout = async () => {
     try {
-      // Call server logout (clears httpOnly cookies and blacklists refresh token)
       await authService.logout();
     } catch (error) {
       // Continue with local logout even if server fails

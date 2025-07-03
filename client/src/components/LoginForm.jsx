@@ -45,8 +45,6 @@ function LoginForm({
     try {
       setLoading(true);
 
-      console.log('🎯 Starting login process...');
-
       // Use authService instead of direct API call
       const result = await authService.login({
         username: formData.username,
@@ -54,13 +52,7 @@ function LoginForm({
       });
 
       if (result.success) {
-        console.log('✅ Login successful via authService');
-
-        // NEW: authLogin only takes user data (no tokens!)
-        // Server already set httpOnly cookies automatically
         await authLogin(result.user);
-
-        console.log('✅ User logged into AuthContext');
 
         // Call onSuccess callback or navigate
         if (onSuccess) {

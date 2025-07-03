@@ -126,7 +126,6 @@ const register = async (req, res) => {
 
 // Login user
 const login = async (req, res) => {
-  console.log('isProduction:', isProduction);
   const { username, password } = req.body;
 
   try {
@@ -208,8 +207,6 @@ const login = async (req, res) => {
         preferences: user.preferences,
       },
     });
-
-    console.log('[AUTH] /auth/login successful for', user._id);
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Login failed' });
@@ -221,11 +218,11 @@ const refreshToken = async (req, res) => {
   try {
     // Get refresh token from httpOnly cookie
     const { refreshToken } = req.cookies;
-    console.log('[AUTH]   cookie refreshToken:', !!refreshToken);
-    console.log('[AUTH] /auth/refresh hit');
+    //console.log('[AUTH]   cookie refreshToken:', !!refreshToken);
+    //console.log('[AUTH] /auth/refresh hit');
 
     if (!refreshToken) {
-      console.log('[AUTH]   no refresh cookie');
+      //console.log('[AUTH]   no refresh cookie');
       return res.status(401).json({ error: 'Refresh token required' });
     }
 
@@ -271,7 +268,7 @@ const refreshToken = async (req, res) => {
     // Set new access token cookie
     res.cookie('accessToken', newAccessToken, COOKIE_OPTIONS);
 
-    console.log('[AUTH]   refresh OK, new access for', payload.userId);
+    //console.log('[AUTH]   refresh OK, new access for', payload.userId);
 
     // Return fresh user data (NO TOKEN in response body)
     res.json({

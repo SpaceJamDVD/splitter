@@ -1,28 +1,19 @@
-// src/api.js
 import axios from 'axios';
 
-/* ------------------------------------------------------------------ */
-/* 1. Axios instance                                                  */
-/* ------------------------------------------------------------------ */
 const API = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
   timeout: 10000,
-  withCredentials: true, // send cookies on every request
+  withCredentials: true,
 });
 
-/* ------------------------------------------------------------------ */
-/* 2. Refresh-lock internals                                          */
-/* ------------------------------------------------------------------ */
-let isRefreshing = false; // true while /auth/refresh is in flight
-let refreshQueue = []; // queued requests waiting for a new token
+let isRefreshing = false;
+let refreshQueue = [];
 
-/**  push a request onto the queue and resolve it later */
 const enqueueRequest = (cb) =>
   new Promise((resolve, reject) => {
     refreshQueue.push({ resolve, reject, cb });
   });
 
-/**  release or fail all queued requests */
 const flushQueue = (error) => {
   refreshQueue.forEach(({ resolve, reject, cb }) =>
     error ? reject(error) : resolve(cb())
@@ -30,9 +21,6 @@ const flushQueue = (error) => {
   refreshQueue = [];
 };
 
-/* ------------------------------------------------------------------ */
-/* 3. Interceptors                                                    */
-/* ------------------------------------------------------------------ */
 API.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -55,11 +43,9 @@ API.interceptors.response.use(
         }
 
         isRefreshing = true;
-        console.log(`[API] Auth error (${code}) → refreshing…`);
 
         try {
           const response = await API.post('/auth/refresh');
-          console.log('[API] Refresh successful');
           flushQueue(null);
           return API(original);
         } catch (refreshErr) {
@@ -77,9 +63,6 @@ API.interceptors.response.use(
   }
 );
 
-/* ------------------------------------------------------------------ */
-/* 4. Helper: logout + event dispatch                                 */
-/* ------------------------------------------------------------------ */
 function handleLogout() {
   localStorage.removeItem('userPreferences');
   sessionStorage.clear();
@@ -92,15 +75,10 @@ function handleLogout() {
   window.dispatchEvent(new CustomEvent('auth:logout'));
 }
 
-/* ------------------------------------------------------------------ */
-/* 5. Utility exports you already had                                 */
-/* ------------------------------------------------------------------ */
 export const logout = async () => {
   try {
     await API.post('/auth/logout');
-  } catch (_) {
-    /* ignore server errors on logout */
-  }
+  } catch (_) {}
   handleLogout();
 };
 
@@ -127,22 +105,12 @@ export const debugAuth = async () => checkAuthStatus();
 export const testTokenExpiration = async () => {
   try {
     await API.get('/auth/verify');
-  } catch (_) {
-    /* ignore */
-  }
+  } catch (_) {}
 };
 
-/* ------------------------------------------------------------------ */
-/* 6. Global event listeners (unchanged)                              */
-/* ------------------------------------------------------------------ */
 if (typeof window !== 'undefined') {
-  window.addEventListener('auth:logout', () => {
-    // handle cross-tab logout
-  });
-
-  window.addEventListener('auth:login', (e) => {
-    // handle cross-tab login
-  });
+  window.addEventListener('auth:logout', () => {});
+  window.addEventListener('auth:login', (e) => {});
 }
 
 export default API;

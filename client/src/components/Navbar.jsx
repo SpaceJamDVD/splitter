@@ -227,7 +227,6 @@ const Navbar = () => {
 
   const handleLogout = () => {
     authContext.logout();
-    // Optionally redirect to login page or show a message
     window.location.href = '/login'; // Redirect to login page
   };
 

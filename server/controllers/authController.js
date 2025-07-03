@@ -2,13 +2,19 @@
 const User = require('../models/User');
 const Group = require('../models/Group');
 const jwt = require('jsonwebtoken');
+const { tokenBlacklist } = require('../middleware/tokenStore');
+const isProduction = process.env.NODE_ENV === 'production';
+const ACCESS_TOKEN_EXPIRY = isProduction ? '15m' : '30s';
+const REFRESH_TOKEN_EXPIRY = '7d';
 
 // Cookie configuration
 const COOKIE_OPTIONS = {
   httpOnly: true, // Cannot be accessed by JavaScript
-  secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-  sameSite: 'strict', // CSRF protection
-  maxAge: 15 * 60 * 1000, // 15 minutes for access token
+  secure: isProduction, // HTTPS only in production
+  sameSite: isProduction ? 'strict' : 'lax', // CSRF protection
+  maxAge: isProduction
+    ? 15 * 60 * 1000 // 15 minutes
+    : 30 * 1000, // 30 seconds
   path: '/',
 };
 
@@ -18,21 +24,18 @@ const REFRESH_COOKIE_OPTIONS = {
   path: '/api/auth/refresh', // Only sent to refresh endpoint
 };
 
-// Token blacklist (in-memory for now)
-const tokenBlacklist = new Set();
-
 // Helper function to generate both access and refresh tokens
 const generateTokens = (payload) => {
   const accessToken = jwt.sign(
     { ...payload, type: 'access' },
     process.env.JWT_ACCESS_SECRET,
-    { expiresIn: '15m' }
+    { expiresIn: ACCESS_TOKEN_EXPIRY }
   );
 
   const refreshToken = jwt.sign(
     { ...payload, type: 'refresh' },
     process.env.JWT_REFRESH_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: REFRESH_TOKEN_EXPIRY }
   );
 
   return { accessToken, refreshToken };
@@ -125,6 +128,7 @@ const register = async (req, res) => {
 
 // Login user
 const login = async (req, res) => {
+  console.log('isProduction:', isProduction);
   const { username, password } = req.body;
 
   try {
@@ -206,6 +210,8 @@ const login = async (req, res) => {
         preferences: user.preferences,
       },
     });
+
+    console.log('[AUTH] /auth/login successful for', user._id);
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Login failed' });
@@ -217,8 +223,11 @@ const refreshToken = async (req, res) => {
   try {
     // Get refresh token from httpOnly cookie
     const { refreshToken } = req.cookies;
+    console.log('[AUTH]   cookie refreshToken:', !!refreshToken);
+    console.log('[AUTH] /auth/refresh hit');
 
     if (!refreshToken) {
+      console.log('[AUTH]   no refresh cookie');
       return res.status(401).json({ error: 'Refresh token required' });
     }
 
@@ -258,11 +267,13 @@ const refreshToken = async (req, res) => {
     const newAccessToken = jwt.sign(
       { ...payload, type: 'access' },
       process.env.JWT_ACCESS_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: ACCESS_TOKEN_EXPIRY }
     );
 
     // Set new access token cookie
     res.cookie('accessToken', newAccessToken, COOKIE_OPTIONS);
+
+    console.log('[AUTH]   refresh OK, new access for', payload.userId);
 
     // Return fresh user data (NO TOKEN in response body)
     res.json({

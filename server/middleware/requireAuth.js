@@ -1,8 +1,6 @@
 // server/middleware/requireAuth.js
 const jwt = require('jsonwebtoken');
-
-// Access to the same blacklist from authController
-const tokenBlacklist = new Set();
+const { tokenBlacklist } = require('./tokenStore'); // Import token blacklist
 
 const requireAuth = (req, res, next) => {
   // Get access token from httpOnly cookie instead of Authorization header

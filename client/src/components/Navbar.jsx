@@ -16,7 +16,6 @@ const NAVBAR_WIDTH_PX = 280;
 const ANIMATION_DURATION_MS = 300;
 
 const Navbar = () => {
-  // Add debugging and error handling
   const authContext = useContext(AuthContext);
   const { user } = authContext;
   const initialIsMobile = window.innerWidth <= BREAKPOINT_MOBILE;
@@ -226,7 +225,11 @@ const Navbar = () => {
     }
   };
 
-  const handleLogout = () => {};
+  const handleLogout = () => {
+    authContext.logout();
+    // Optionally redirect to login page or show a message
+    window.location.href = '/login'; // Redirect to login page
+  };
 
   return (
     <>

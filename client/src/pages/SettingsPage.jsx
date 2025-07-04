@@ -4,7 +4,6 @@ import { AuthContext } from '../contexts/AuthContext';
 
 const SettingsPage = () => {
   const { user } = useContext(AuthContext); // Get user from context
-  console.log(user);
 
   const styles = {
     container: {

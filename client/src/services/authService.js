@@ -105,6 +105,7 @@ class AuthService {
       const response = await API.put('/auth/profile', {
         firstName: profileData.firstName?.trim(),
         lastName: profileData.lastName?.trim(),
+        username: profileData.username?.trim(),
         timezone: profileData.timezone,
         currency: profileData.currency,
       });

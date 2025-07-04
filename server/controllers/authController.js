@@ -339,7 +339,7 @@ const verifyToken = async (req, res) => {
 // Update user profile
 const updateProfile = async (req, res) => {
   try {
-    const { firstName, lastName, timezone, currency } = req.body;
+    const { firstName, lastName, username, timezone, currency } = req.body;
     const userId = req.user.userId;
 
     const user = await User.findById(userId);
@@ -350,6 +350,7 @@ const updateProfile = async (req, res) => {
     // Update profile fields
     if (firstName !== undefined) user.profile.firstName = firstName.trim();
     if (lastName !== undefined) user.profile.lastName = lastName.trim();
+    if (username !== undefined) user.username = username.trim();
     if (timezone !== undefined) user.profile.timezone = timezone;
     if (currency !== undefined) user.profile.currency = currency;
 

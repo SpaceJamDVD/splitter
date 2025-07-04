@@ -189,39 +189,9 @@ export const AuthProvider = ({ children }) => {
     groupId: user?.groupId,
     isEmailVerified: user?.isEmailVerified || false,
     plan: user?.plan || 'free',
-
-    // Note: No token helpers needed - cookies are managed by server
   };
 
   return (
     <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
   );
-};
-
-// Custom hook for using auth context
-export const useAuth = () => {
-  const context = React.useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
-
-// HOC for protecting routes
-export const withAuth = (Component) => {
-  return function AuthenticatedComponent(props) {
-    const { isLoggedIn, loading } = useAuth();
-
-    if (loading) {
-      return <div>Loading...</div>;
-    }
-
-    if (!isLoggedIn) {
-      // Redirect to login or show login form
-      window.location.href = '/login';
-      return null;
-    }
-
-    return <Component {...props} />;
-  };
 };

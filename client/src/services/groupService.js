@@ -25,6 +25,7 @@ export const getInviteInfo = async (inviteToken) => {
 };
 
 export const joinGroupWithToken = async (inviteToken, userData = {}) => {
+  console.log('Joining group with token:', inviteToken, userData);
   const response = await API.post(`/groups/join/${inviteToken}`, userData);
   return response.data;
 };

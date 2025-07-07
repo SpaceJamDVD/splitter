@@ -33,6 +33,7 @@ const JoinGroupPage = () => {
   // Auto-join for authenticated users who aren't members
   useEffect(() => {
     if (user && groupInfo && !joining) {
+      console.log(user, groupInfo, joining);
       const isAlreadyMember = groupInfo.members?.some(
         (member) => member._id === user.userId
       );
@@ -49,6 +50,7 @@ const JoinGroupPage = () => {
   const handleJoinGroup = async (userData = null) => {
     if (joining) return;
 
+    // For new users, validate the userData parameter
     if (!user && (!userData || !userData.username || !userData.password)) {
       setError('Please provide a username and password to join');
       return;
@@ -58,10 +60,9 @@ const JoinGroupPage = () => {
     setError('');
 
     try {
-      const requestData =
-        userData && userData.username && userData.password
-          ? userData
-          : undefined;
+      // If we have userData (new user registering), pass it
+      // If we have an authenticated user, pass empty object
+      const requestData = userData || {};
 
       const response = await joinGroupWithToken(inviteToken, requestData);
 

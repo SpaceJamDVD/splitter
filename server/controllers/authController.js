@@ -486,4 +486,7 @@ module.exports = {
   logout,
   deleteAccount,
   getBlacklistInfo,
+  generateTokens,
+  COOKIE_OPTIONS,
+  REFRESH_COOKIE_OPTIONS,
 };

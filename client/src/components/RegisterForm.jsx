@@ -17,6 +17,9 @@ function RegisterForm({
   error = null,
   onNavigateToLogin = null,
   groupName = null,
+  onJoinGroup = null,
+  mode = null,
+  inviteToken = null,
 }) {
   const [formData, setFormData] = useState({
     username: '',
@@ -72,7 +75,16 @@ function RegisterForm({
     try {
       setLoading(true);
 
-      console.log('🎯 Starting registration process...');
+      if (mode === 'join' && onJoinGroup) {
+        await onJoinGroup({
+          username: formData.username,
+          email: formData.email,
+          password: formData.password,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+        });
+        return;
+      }
 
       // Use authService instead of direct API call
       const result = await authService.register({
@@ -84,16 +96,10 @@ function RegisterForm({
       });
 
       if (result.success) {
-        console.log('✅ Registration successful via authService');
-
         setMessage('Account created successfully!');
         setMessageType('success');
 
-        // NEW: authLogin only takes user data (no tokens!)
-        // Server already set httpOnly cookies automatically
         await authLogin(result.user);
-
-        console.log('✅ User logged into AuthContext');
 
         // Call onSuccess callback or navigate
         if (onSuccess) {
@@ -106,12 +112,12 @@ function RegisterForm({
         }
       } else {
         // Handle registration failure
-        console.error('❌ Registration failed:', result.error);
+        console.error('Registration failed:', result.error);
         setMessage(result.error);
         setMessageType('error');
       }
     } catch (err) {
-      console.error('❌ Registration error:', err);
+      console.error('Registration error:', err);
       setMessage('Registration failed. Please try again.');
       setMessageType('error');
     } finally {

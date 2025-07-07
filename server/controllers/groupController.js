@@ -3,8 +3,11 @@ const Group = require('../models/Group');
 const User = require('../models/User');
 const MemberBalance = require('../models/MemberBalance');
 const { v4: uuidv4 } = require('uuid');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
+const {
+  generateTokens,
+  COOKIE_OPTIONS,
+  REFRESH_COOKIE_OPTIONS,
+} = require('./authController');
 
 class GroupController {
   // Create new group (protected route)
@@ -96,103 +99,118 @@ class GroupController {
     }
   }
 
-  // Join group (PUBLIC route - handles signup + join)
   async joinGroup(req, res) {
     const { inviteToken } = req.params;
 
     try {
-      const bodyData = req.body || {};
-      const { username = null, password = null, email = null } = bodyData;
+      const { username, password, email, firstName, lastName } = req.body || {};
 
+      // -----------------------------------------------------------------------
+      // 1. Validate invite link
+      // -----------------------------------------------------------------------
       const group = await Group.findOne({ inviteToken });
-
       if (!group) {
         return res
           .status(404)
           .json({ error: 'Invalid or expired invite link' });
       }
 
-      let userId;
+      // -----------------------------------------------------------------------
+      // 2. Figure out the *current* user (either logged in or about to sign up)
+      // -----------------------------------------------------------------------
+      let user = null;
       let isNewUser = false;
 
-      const authHeader = req.headers.authorization;
-
-      if (authHeader) {
-        try {
-          const token = authHeader.split(' ')[1];
-          const decoded = jwt.verify(token, process.env.JWT_SECRET);
-          userId = decoded.userId;
-        } catch (err) {}
+      // A. Already authenticated? -> pull userId from access token cookie
+      if (req.user?.userId) {
+        user = await User.findById(req.user.userId);
       }
 
-      if (!userId && password && email) {
-        const existingUser = await User.findOne({ email });
+      // B. Not authenticated -> attempt inline sign-up
+      if (!user) {
+        if (!username || !password || !email) {
+          return res.status(400).json({
+            error: 'Username, email and password are required',
+            requiresAuth: true,
+          });
+        }
 
-        if (existingUser) {
+        // Reject duplicate email
+        if (await User.findOne({ email: email.trim().toLowerCase() })) {
           return res.status(400).json({
             error:
               'Email already registered. Please use another email or login.',
           });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const newUser = await User.create({
-          username,
-          email,
-          passwordHash: hashedPassword,
+        // ---------------------------------------------------------------
+        // *** FIX ***  Do NOT hash here – let the Mongoose hook do it
+        // ---------------------------------------------------------------
+        user = new User({
+          username: username.trim(),
+          email: email.trim().toLowerCase(),
+          passwordHash: password, // raw -> will be hashed once
+          profile: { firstName, lastName },
+          isActive: true,
         });
 
-        userId = newUser._id;
+        await user.save();
         isNewUser = true;
-      } else if (!userId) {
-        const missingFields = [];
-        if (!password) missingFields.push('password');
-        if (!email) missingFields.push('email');
-
-        return res.status(400).json({
-          error:
-            missingFields.length > 0
-              ? `Missing required fields: ${missingFields.join(', ')}`
-              : 'Please provide account details or login first',
-          requiresAuth: true,
-        });
       }
 
-      if (group.members.includes(userId)) {
-        return res
-          .status(400)
-          .json({ error: 'You are already a member of this group' });
+      // -----------------------------------------------------------------------
+      // 3. Add user to the group
+      // -----------------------------------------------------------------------
+      if (group.members.includes(user._id)) {
+        return res.status(400).json({ error: 'You are already a member' });
       }
 
-      group.members.push(userId);
+      group.members.push(user._id);
       await group.save();
 
-      const existing = await MemberBalance.findOne({
-        groupId: group._id,
-        memberId: userId,
-      });
+      // Ensure a MemberBalance row exists
+      await MemberBalance.findOneAndUpdate(
+        { groupId: group._id, memberId: user._id },
+        { $setOnInsert: { balance: 0 } },
+        { upsert: true, new: true }
+      );
 
-      if (!existing) {
-        await MemberBalance.create({
-          groupId: group._id,
-          memberId: userId,
-          balance: 0,
-        });
-      }
-
-      let token = null;
+      // -----------------------------------------------------------------------
+      // 4. Handle auth cookies for *newly created* users
+      // -----------------------------------------------------------------------
       if (isNewUser) {
-        token = jwt.sign({ userId }, process.env.JWT_SECRET);
+        const payload = {
+          userId: user._id,
+          username: user.username,
+          email: user.email,
+          groupId: group._id,
+          isEmailVerified: user.isEmailVerified,
+          plan: user.subscription.plan,
+        };
+
+        const { accessToken, refreshToken } = generateTokens(payload);
+        res.cookie('accessToken', accessToken, COOKIE_OPTIONS);
+        res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
       }
 
+      // -----------------------------------------------------------------------
+      // 5. Send response (no raw tokens in body)
+      // -----------------------------------------------------------------------
       res.json({
         message: 'Successfully joined group',
         group,
-        token,
         isNewUser,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          fullName: user.profile.fullName,
+          isEmailVerified: user.isEmailVerified,
+          plan: user.subscription.plan,
+        },
       });
     } catch (err) {
+      console.error('Join group error:', err);
       res.status(500).json({ error: 'Failed to join group' });
     }
   }

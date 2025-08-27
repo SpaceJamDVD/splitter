@@ -219,12 +219,7 @@ const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
   const handleSettleUp = async () => {
     try {
       await settleUp(groupId);
-      alert('Settled up successfully!');
-    } catch (err) {
-      alert(
-        'Failed to settle: ' + (err.response?.data?.error || 'Unknown error')
-      );
-    }
+    } catch (err) {}
   };
 
   const getCategoryIcon = (category) => {
@@ -732,7 +727,7 @@ const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
                   </p>
                   <p style={{ margin: 0 }}>
                     {Object.entries(balances)
-                      .filter(([userId, bal]) => bal > 0 && userId !== user?.id) // FIXED: using user.id
+                      .filter(([userId, bal]) => bal > 0 && userId !== user?.id)
                       .map(([userId, bal]) => {
                         const username = getUsername(userId);
                         const amountToPay = Math.abs(bal);

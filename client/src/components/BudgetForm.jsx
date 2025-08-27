@@ -248,7 +248,8 @@ const BudgetForm = ({
                   {cat}
                 </option>
               ))}
-              <option value="custom">Custom Category</option>
+              {/* will re-enable custom categories later */}
+              {/* <option value="custom">Custom Category</option> */}
             </select>
           </div>
 

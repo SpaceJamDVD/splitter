@@ -86,7 +86,6 @@ const TransactionForm = ({ groupId, onClose }) => {
       marginBottom: '20px',
     },
     label: {
-      display: 'block',
       fontSize: '14px',
       fontWeight: '600',
       color: '#374151',

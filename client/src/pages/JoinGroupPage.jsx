@@ -9,25 +9,30 @@ const JoinGroupPage = () => {
   const { inviteToken } = useParams();
   const { user, login } = useContext(AuthContext);
   const navigate = useNavigate();
+
   const [groupInfo, setGroupInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [joining, setJoining] = useState(false);
 
-  // Fetch group info on mount
+  // Fetch group info on mount / token change
   useEffect(() => {
-    const fetchGroupInfo = async () => {
+    let isMounted = true;
+
+    (async () => {
       try {
         const response = await getInviteInfo(inviteToken);
-        setGroupInfo(response);
+        if (isMounted) setGroupInfo(response);
       } catch (err) {
-        setError('Invalid or expired invite link');
+        if (isMounted) setError('Invalid or expired invite link');
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
-    };
+    })();
 
-    fetchGroupInfo();
+    return () => {
+      isMounted = false;
+    };
   }, [inviteToken]);
 
   // Auto-join for authenticated users who aren't members
@@ -41,38 +46,27 @@ const JoinGroupPage = () => {
     if (isAlreadyMember) {
       navigate('/dashboard');
     } else {
-      handleJoinGroup({}); // signed-in user, no data needed
+      // inline async join for signed-in users
+      (async () => {
+        setJoining(true);
+        setError('');
+        try {
+          const response = await joinGroupWithToken(inviteToken, {});
+
+          // If server created a new user (edge-case), refresh session
+          if (!user && response?.isNewUser) {
+            await login();
+          }
+
+          navigate('/dashboard');
+        } catch (err) {
+          console.error('Join group error:', err);
+          setError(err?.response?.data?.error || 'Failed to join group');
+          setJoining(false);
+        }
+      })();
     }
-  }, [user, groupInfo, joining]);
-
-  const handleJoinGroup = async (userData = null) => {
-    if (joining) return;
-
-    if (!user && (!userData || !userData.username || !userData.password)) {
-      setError('Please provide a username and password to join');
-      return;
-    }
-
-    setJoining(true);
-    setError('');
-
-    try {
-      const requestData = userData || {};
-
-      const response = await joinGroupWithToken(inviteToken, requestData);
-
-      // If new user created, login with cookies already set
-      if (!user && response.isNewUser) {
-        await login(); // no token param anymore — just re-sync from cookies
-      }
-
-      navigate('/dashboard');
-    } catch (err) {
-      console.error('Join group error:', err);
-      setError(err.response?.data?.error || 'Failed to join group');
-      setJoining(false);
-    }
-  };
+  }, [user, groupInfo, joining, inviteToken, login, navigate]);
 
   const styles = {
     container: {
@@ -155,8 +149,38 @@ const JoinGroupPage = () => {
           mode="join"
           inviteToken={inviteToken}
           groupName={groupInfo?.groupName}
-          onJoinGroup={handleJoinGroup}
           error={error}
+          onJoinGroup={async (userData = null) => {
+            if (joining) return;
+
+            if (
+              !user &&
+              (!userData || !userData.username || !userData.password)
+            ) {
+              setError('Please provide a username and password to join');
+              return;
+            }
+
+            setJoining(true);
+            setError('');
+            try {
+              const requestData = userData || {};
+              const response = await joinGroupWithToken(
+                inviteToken,
+                requestData
+              );
+
+              if (!user && response?.isNewUser) {
+                await login();
+              }
+
+              navigate('/dashboard');
+            } catch (err) {
+              console.error('Join group error:', err);
+              setError(err?.response?.data?.error || 'Failed to join group');
+              setJoining(false);
+            }
+          }}
         />
       </div>
     );

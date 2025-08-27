@@ -99,8 +99,7 @@ const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
     // Fetch initial data
     fetchAllData();
 
-    // Setup socket connection
-    const socket = socketService.connect(token);
+    // Socket event handlers
 
     const handleConnect = () => {
       setIsSocketConnected(true);

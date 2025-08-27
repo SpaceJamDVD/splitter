@@ -319,165 +319,146 @@ class TransactionController {
   }
 
   async settleUp(req, res) {
-    const { groupId } = req.params;
+    // read from body; your client posts { groupId }
+    const { groupId } = req.body;
     const userId = req.user.userId;
 
+    if (!groupId) {
+      return res.status(400).json({ error: 'Group ID is required.' });
+    }
+
     try {
-      const userId = req.user.userId;
-      const { groupId } = req.body;
-
-      if (!groupId) {
-        return res.status(400).json({ error: 'Group ID is required.' });
+      const group = await Group.findById(groupId);
+      if (!group) {
+        return res.status(404).json({ error: 'Group not found' });
       }
 
-      try {
-        const group = await Group.findById(groupId);
-        if (!group) {
-          return res.status(404).json({ error: 'Group not found' });
-        }
+      const allGroupMembers = await User.find({
+        _id: {
+          $in: group.members.map((id) => new mongoose.Types.ObjectId(id)),
+        },
+      });
 
-        const allGroupMembers = await User.find({
-          _id: {
-            $in: group.members.map((id) => new mongoose.Types.ObjectId(id)),
-          },
-        });
-
-        if (allGroupMembers.length !== 2) {
-          return res.status(400).json({
-            error:
-              'This settlement function is currently designed for groups with exactly 2 members.',
-          });
-        }
-
-        const memberBalances = await MemberBalance.find({ groupId }).populate(
-          'memberId',
-          'username'
-        );
-
-        if (memberBalances.length === 0) {
-          return res.status(200).json({
-            message: 'No balances found. Nothing to settle.',
-          });
-        }
-
-        let payerId = null;
-        let recipientId = null;
-        let settlementAmount = 0;
-
-        const EPSILON = 0.01;
-
-        const allBalancesSettled = memberBalances.every(
-          (mb) => Math.abs(mb.balance) < EPSILON
-        );
-        if (allBalancesSettled) {
-          return res
-            .status(200)
-            .json({ message: 'All balances are already settled.' });
-        }
-
-        for (const memberBalance of memberBalances) {
-          if (memberBalance.balance < -EPSILON) {
-            payerId = memberBalance.memberId._id.toString();
-            settlementAmount = Math.abs(memberBalance.balance);
-          } else if (memberBalance.balance > EPSILON) {
-            recipientId = memberBalance.memberId._id.toString();
-          }
-        }
-
-        if (!payerId || !recipientId || settlementAmount <= EPSILON) {
-          return res.status(200).json({
-            message: 'No significant debt to settle.',
-          });
-        }
-
-        const payer = allGroupMembers.find((u) => u._id.toString() === payerId);
-        const recipient = allGroupMembers.find(
-          (u) => u._id.toString() === recipientId
-        );
-
-        if (!payer || !recipient) {
-          return res.status(500).json({
-            error: 'Could not identify payer or recipient for settlement.',
-          });
-        }
-
-        const settlementTransaction = new Transaction({
-          groupId: new mongoose.Types.ObjectId(groupId),
-          amount: settlementAmount,
-          description: `Settlement: ${payer.username} paid ${recipient.username}`,
-          isSettlement: true,
-          paidBy: new mongoose.Types.ObjectId(payerId),
-          owedToPurchaser: true,
-          splitEvenly: false,
-          customSplit: [],
-          category: 'Settlement',
-          notes: `${payer.username} paid ${recipient.username} back.`,
-          date: new Date(),
-        });
-
-        await settlementTransaction.save();
-
-        await MemberBalance.updateMany({ groupId }, { $set: { balance: 0 } });
-
-        res.status(201).json({
-          message: 'Balances settled successfully!',
-          settlement: settlementTransaction,
-          balancesZeroed: true,
-        });
-      } catch (err) {
-        res.status(500).json({
-          error: 'Failed to settle balances.',
-          details: err.message,
+      if (allGroupMembers.length !== 2) {
+        return res.status(400).json({
+          error:
+            'This settlement function is currently designed for groups with exactly 2 members.',
         });
       }
 
-      // Reset all balances to 0
+      const memberBalances = await MemberBalance.find({ groupId }).populate(
+        'memberId',
+        'username'
+      );
+
+      if (memberBalances.length === 0) {
+        return res
+          .status(200)
+          .json({ message: 'No balances found. Nothing to settle.' });
+      }
+
+      const EPSILON = 0.01;
+      const allSettled = memberBalances.every(
+        (mb) => Math.abs(mb.balance) < EPSILON
+      );
+      if (allSettled) {
+        return res
+          .status(200)
+          .json({ message: 'All balances are already settled.' });
+      }
+
+      // determine payer/recipient
+      let payerId = null;
+      let recipientId = null;
+      let settlementAmount = 0;
+
+      for (const mb of memberBalances) {
+        if (mb.balance < -EPSILON) {
+          payerId = mb.memberId._id.toString();
+          settlementAmount = Math.abs(mb.balance);
+        } else if (mb.balance > EPSILON) {
+          recipientId = mb.memberId._id.toString();
+        }
+      }
+
+      if (!payerId || !recipientId || settlementAmount <= EPSILON) {
+        return res
+          .status(200)
+          .json({ message: 'No significant debt to settle.' });
+      }
+
+      const payer = allGroupMembers.find((u) => u._id.toString() === payerId);
+      const recipient = allGroupMembers.find(
+        (u) => u._id.toString() === recipientId
+      );
+      if (!payer || !recipient) {
+        return res.status(500).json({
+          error: 'Could not identify payer or recipient for settlement.',
+        });
+      }
+
+      // create settlement transaction
+      const settlementTransaction = new Transaction({
+        groupId: new mongoose.Types.ObjectId(groupId),
+        amount: settlementAmount,
+        description: `Settlement: ${payer.username} paid ${recipient.username}`,
+        isSettlement: true,
+        paidBy: new mongoose.Types.ObjectId(payerId),
+        owedToPurchaser: true,
+        splitEvenly: false,
+        customSplit: [],
+        category: 'Settlement',
+        notes: `${payer.username} paid ${recipient.username} back.`,
+        date: new Date(),
+      });
+
+      await settlementTransaction.save();
+
+      // zero balances once
       await MemberBalance.updateMany({ groupId }, { $set: { balance: 0 } });
 
-      // ========== SOCKET.IO IMPLEMENTATION ==========
-
+      // socket.io emits BEFORE sending the response
       const io = req.app.get('io');
       if (io) {
-        // Get the user who settled up
         const user = await User.findById(userId).select('username email');
 
-        // Emit settlement event
         io.to(`group-${groupId}`).emit('group-settled', {
-          groupId: groupId,
-          settledBy: {
-            userId: userId,
-            username: user.username,
-          },
+          groupId,
+          settledBy: { userId, username: user?.username },
           timestamp: new Date().toISOString(),
         });
 
-        // Get updated (zero) balances
         const updatedBalances = await MemberBalance.find({ groupId }).populate(
           'memberId',
           'username email'
         );
 
         io.to(`group-${groupId}`).emit('balance-update', {
-          groupId: groupId,
+          groupId,
           balances: updatedBalances,
           timestamp: new Date().toISOString(),
         });
 
-        // Emit notification
         io.to(`group-${groupId}`).emit('notification', {
           id: Date.now(),
           type: 'settlement',
-          message: `${user.username} settled up the group expenses`,
-          groupId: groupId,
+          message: `${
+            user?.username || 'Someone'
+          } settled up the group expenses`,
+          groupId,
           timestamp: new Date().toISOString(),
         });
       }
 
-      // ===============================================
-
-      res.json({ message: 'Group expenses settled successfully' });
+      // single success response
+      return res.status(201).json({
+        message: 'Balances settled successfully!',
+        settlement: settlementTransaction,
+        balancesZeroed: true,
+      });
     } catch (err) {
-      res.status(500).json({
+      console.error('settleUp error:', err);
+      return res.status(500).json({
         error: 'Failed to settle up',
         details: err.message,
       });

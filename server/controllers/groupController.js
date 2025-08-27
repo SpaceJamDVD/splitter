@@ -105,9 +105,23 @@ class GroupController {
     try {
       const { username, password, email, firstName, lastName } = req.body || {};
 
-      // -----------------------------------------------------------------------
-      // 1. Validate invite link
-      // -----------------------------------------------------------------------
+      let user = null;
+      const accessToken = req.cookies?.accessToken;
+
+      if (accessToken) {
+        try {
+          const decoded = jwt.verify(
+            accessToken,
+            process.env.JWT_ACCESS_SECRET
+          );
+          if (decoded.type === 'access') {
+            user = await User.findById(decoded.userId);
+          }
+        } catch (_) {
+          /* ignore bad/expired token – we’ll ask for signup/login instead */
+        }
+      }
+
       const group = await Group.findOne({ inviteToken });
       if (!group) {
         return res
@@ -115,18 +129,12 @@ class GroupController {
           .json({ error: 'Invalid or expired invite link' });
       }
 
-      // -----------------------------------------------------------------------
-      // 2. Figure out the *current* user (either logged in or about to sign up)
-      // -----------------------------------------------------------------------
-      let user = null;
       let isNewUser = false;
 
-      // A. Already authenticated? -> pull userId from access token cookie
       if (req.user?.userId) {
         user = await User.findById(req.user.userId);
       }
 
-      // B. Not authenticated -> attempt inline sign-up
       if (!user) {
         if (!username || !password || !email) {
           return res.status(400).json({
@@ -135,7 +143,6 @@ class GroupController {
           });
         }
 
-        // Reject duplicate email
         if (await User.findOne({ email: email.trim().toLowerCase() })) {
           return res.status(400).json({
             error:
@@ -143,13 +150,10 @@ class GroupController {
           });
         }
 
-        // ---------------------------------------------------------------
-        // *** FIX ***  Do NOT hash here – let the Mongoose hook do it
-        // ---------------------------------------------------------------
         user = new User({
           username: username.trim(),
           email: email.trim().toLowerCase(),
-          passwordHash: password, // raw -> will be hashed once
+          passwordHash: password,
           profile: { firstName, lastName },
           isActive: true,
         });
@@ -158,9 +162,6 @@ class GroupController {
         isNewUser = true;
       }
 
-      // -----------------------------------------------------------------------
-      // 3. Add user to the group
-      // -----------------------------------------------------------------------
       if (group.members.includes(user._id)) {
         return res.status(400).json({ error: 'You are already a member' });
       }
@@ -168,16 +169,12 @@ class GroupController {
       group.members.push(user._id);
       await group.save();
 
-      // Ensure a MemberBalance row exists
       await MemberBalance.findOneAndUpdate(
         { groupId: group._id, memberId: user._id },
         { $setOnInsert: { balance: 0 } },
         { upsert: true, new: true }
       );
 
-      // -----------------------------------------------------------------------
-      // 4. Handle auth cookies for *newly created* users
-      // -----------------------------------------------------------------------
       if (isNewUser) {
         const payload = {
           userId: user._id,
@@ -193,9 +190,6 @@ class GroupController {
         res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
       }
 
-      // -----------------------------------------------------------------------
-      // 5. Send response (no raw tokens in body)
-      // -----------------------------------------------------------------------
       res.json({
         message: 'Successfully joined group',
         group,

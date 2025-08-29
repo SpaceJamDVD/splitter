@@ -3,51 +3,69 @@ require('dotenv').config();
 
 const express = require('express');
 const mongoose = require('mongoose');
-const requireAuth = require('./middleware/requireAuth');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const http = require('http');
+const { Server } = require('socket.io');
+
+const requireAuth = require('./middleware/requireAuth');
 
 const app = express();
-const server = require('http').createServer(app);
+const server = http.createServer(app);
 
-const io = require('socket.io')(server, {
-  cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
-    methods: ['GET', 'POST'],
-    credentials: true,
+/* -------- CORS (dev/prod via env) -------- */
+// Prefer ALLOWED_ORIGINS (comma-separated). Fallback to CLIENT_URL or localhost.
+const envOrigins = (process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const allowedOrigins = envOrigins.length
+  ? envOrigins
+  : ['http://localhost:3000'];
+
+const corsOptions = {
+  origin(origin, cb) {
+    // allow tools without an Origin (curl/postman) and any whitelisted origin
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error(`Not allowed by CORS: ${origin}`));
   },
-});
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
 
-// CORS setup
-app.use(
-  cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
-    credentials: true,
-  })
-);
+if (process.env.NODE_ENV === 'production') {
+  // needed for secure cookies behind Render/Proxies
+  app.set('trust proxy', 1);
+}
 
-// Body parsing
+app.use(cors(corsOptions));
+
+/* -------- App middleware -------- */
 app.use(express.json());
-
 app.use(cookieParser());
 
-// Connect to MongoDB
+/* -------- Socket.IO (share same CORS policy) -------- */
+const io = new Server(server, { cors: corsOptions });
+app.set('io', io);
+
+io.on('connection', (socket) => {
+  socket.on('join-room', (roomId) => socket.join(roomId));
+  socket.on('send-message', (data) =>
+    socket.to(data.room).emit('receive-message', data)
+  );
+});
+
 mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000 })
   .then(() => console.log('MongoDB connected'))
   .catch((err) => console.error('MongoDB connection error:', err));
 
-// Routes
-
-app.set('io', io);
-
+/* -------- Routes -------- */
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
 
-// Some routes are protected, so we apply requireAuth middleware locally
 const groupRoutes = require('./routes/groups');
 app.use('/api/groups', groupRoutes);
 
@@ -60,7 +78,7 @@ app.use('/api/memberBalance', requireAuth, memberBalanceRoutes);
 const budgetRoutes = require('./routes/budgets');
 app.use('/api/budgets', requireAuth, budgetRoutes);
 
-// Test route
+// quick health check for DB
 app.get('/api/test-db', async (req, res) => {
   try {
     await mongoose.connection.db.admin().ping();
@@ -70,28 +88,6 @@ app.get('/api/test-db', async (req, res) => {
   }
 });
 
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-  //console.log('User connected:', socket.id);
-
-  // Handle custom events
-  socket.on('join-room', (roomId) => {
-    socket.join(roomId);
-    //console.log(`User ${socket.id} joined room ${roomId}`);
-  });
-
-  socket.on('send-message', (data) => {
-    // Emit to specific room or broadcast
-    socket.to(data.room).emit('receive-message', data);
-  });
-
-  socket.on('disconnect', () => {
-    //console.log('User disconnected:', socket.id);
-  });
-});
-
-// Start server (only once, using server not app)
+/* -------- Start -------- */
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

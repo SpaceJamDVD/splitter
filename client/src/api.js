@@ -1,9 +1,13 @@
 import axios from 'axios';
 
+const root = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(
+  /\/+$/,
+  ''
+);
 const API = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
-  timeout: 10000,
+  baseURL: `${root}/api`,
   withCredentials: true,
+  timeout: 10000,
 });
 
 let isRefreshing = false;

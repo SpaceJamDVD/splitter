@@ -24,15 +24,23 @@ const allowedOrigins = envOrigins.length
   ? envOrigins
   : ['http://localhost:3000'];
 
+const normalize = (u = '') => u.replace(/\/+$/, '');
+const allowed = new Set(
+  (process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || '')
+    .split(',')
+    .map((s) => normalize(s.trim()))
+    .filter(Boolean)
+);
+
 const corsOptions = {
   origin(origin, cb) {
-    // allow tools without an Origin (curl/postman) and any whitelisted origin
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    if (!origin || allowed.has(normalize(origin))) return cb(null, true);
     return cb(new Error(`Not allowed by CORS: ${origin}`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
 };
 
 if (process.env.NODE_ENV === 'production') {
@@ -41,6 +49,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.use(cors(corsOptions));
+app.options(/^\/api\/.*$/, cors(corsOptions));
 
 /* -------- App middleware -------- */
 app.use(express.json());

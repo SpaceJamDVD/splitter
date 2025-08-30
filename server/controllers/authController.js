@@ -11,7 +11,7 @@ const REFRESH_TOKEN_EXPIRY = '7d';
 const COOKIE_OPTIONS = {
   httpOnly: true, // Cannot be accessed by JavaScript
   secure: isProduction, // HTTPS only in production
-  sameSite: isProduction ? 'strict' : 'lax', // CSRF protection
+  sameSite: isProduction ? 'none' : 'lax', // CSRF protection
   maxAge: 15 * 60 * 1000, // 15 minutes
   path: '/',
 };

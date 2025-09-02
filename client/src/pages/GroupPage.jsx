@@ -4,6 +4,7 @@ import TransactionList from '../components/TransactionList';
 import GroupForm from '../components/GroupForm';
 import { AuthContext } from '../contexts/AuthContext';
 import { getGroupById, getUserGroup } from '../services/groupService';
+import useIsMobile from '../hooks/useIsMobile';
 import {
   Users,
   Plus,
@@ -28,6 +29,7 @@ const GroupPage = () => {
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [showInviteButton, setShowInviteButton] = useState(false);
   const [canAddTransaction, setCanAddTransaction] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const loadGroup = async () => {
@@ -85,7 +87,7 @@ const GroupPage = () => {
     content: {
       padding: '40px',
       maxWidth: '1200px',
-      minWidth: '1200px',
+      width: '100%',
     },
     loadingContainer: {
       padding: '40px',
@@ -486,7 +488,11 @@ const GroupPage = () => {
         )}
 
         {/* Transaction List */}
-        <TransactionList groupId={group._id} members={group.members} />
+        <TransactionList
+          groupId={group._id}
+          members={group.members}
+          isMobile={isMobile}
+        />
       </div>
 
       {/* Invite Modal */}

@@ -20,13 +20,19 @@ import {
   Loader,
 } from 'lucide-react';
 
-const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
+const TransactionList = ({
+  groupId,
+  members: allGroupMembers = [],
+  isMobile = false,
+}) => {
   const {
     user,
     token,
     loading: authLoading,
     isLoggedIn,
   } = useContext(AuthContext);
+
+  //console.log('TransactionList isMobile:', isMobile);
 
   // State management
   const [transactions, setTransactions] = useState([]);
@@ -598,21 +604,54 @@ const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
     <>
       <BudgetAlertManager groupId={groupId} />
 
-      <div style={styles.container}>
+      <div
+        style={{
+          ...styles.container,
+          ...(isMobile ? { padding: 12 } : {}),
+        }}
+      >
         {/* Header Section */}
-        <div style={styles.header}>
-          <h1 style={styles.title}>Expense Tracker</h1>
-          <p style={styles.subtitle}>Track and manage your shared expenses</p>
+        <div
+          style={{
+            ...styles.header,
+            ...(isMobile ? { marginBottom: 20 } : {}),
+          }}
+        >
+          <h1
+            style={{
+              ...styles.title,
+              ...(isMobile ? { fontSize: 22 } : {}),
+            }}
+          >
+            Expense Tracker
+          </h1>
+
+          <p
+            style={{
+              ...styles.subtitle,
+              ...(isMobile ? { fontSize: 14, marginTop: 6 } : {}),
+            }}
+          >
+            Track and manage your shared expenses
+          </p>
+
           <div
             style={{
               ...styles.connectionStatus,
               ...(isSocketConnected ? styles.connected : styles.disconnected),
+              ...(isMobile
+                ? {
+                    position: 'static', // don't overlap the title
+                    marginTop: 8,
+                    display: 'inline-flex',
+                  }
+                : {}),
             }}
           >
             <span
               style={{
-                width: '8px',
-                height: '8px',
+                width: 8,
+                height: 8,
                 backgroundColor: isSocketConnected ? '#16a34a' : '#dc2626',
                 borderRadius: '50%',
                 animation: isSocketConnected ? 'pulse 2s infinite' : 'none',
@@ -623,36 +662,83 @@ const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
         </div>
 
         {/* Balance Overview Card */}
-        <div style={styles.balanceCard}>
-          <div style={styles.balanceHeader}>
-            <h2 style={styles.balanceTitle}>
-              <TrendingUp size={20} color="#2563eb" />
+        <div
+          style={{
+            ...styles.balanceCard,
+            ...(isMobile ? { padding: 16, marginBottom: 20 } : {}),
+          }}
+        >
+          <div
+            style={{
+              ...styles.balanceHeader,
+              ...(isMobile ? { gap: 12, marginBottom: 16 } : {}),
+            }}
+          >
+            <h2
+              style={{
+                ...styles.balanceTitle,
+                ...(isMobile ? { fontSize: 18 } : {}),
+              }}
+            >
+              <TrendingUp size={isMobile ? 16 : 20} color="#2563eb" />
               Balance Overview
             </h2>
+
             <button
-              style={styles.settleButton}
+              style={{
+                ...styles.settleButton,
+                ...(isMobile
+                  ? {
+                      width: '100%', // full width on mobile
+                      padding: '10px 16px',
+                      fontSize: 14,
+                    }
+                  : {}),
+              }}
               onClick={handleSettleUp}
               onMouseEnter={(e) => {
-                e.target.style.transform = 'scale(1.05)';
-                e.target.style.boxShadow =
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.boxShadow =
                   '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
               }}
               onMouseLeave={(e) => {
-                e.target.style.transform = 'scale(1)';
-                e.target.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow =
+                  '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
               }}
             >
               Settle Up
             </button>
           </div>
 
-          <div style={styles.balanceGrid}>
+          <div
+            style={{
+              ...styles.balanceGrid,
+              ...(isMobile
+                ? {
+                    gridTemplateColumns: '1fr', // collapse to single column
+                    gap: 12,
+                  }
+                : {}),
+            }}
+          >
             {/* My Balance */}
-            <div style={styles.myBalanceCard}>
-              <div style={styles.balanceInfo}>
+            <div
+              style={{
+                ...styles.myBalanceCard,
+                ...(isMobile ? { padding: 12 } : {}),
+              }}
+            >
+              <div
+                style={{
+                  ...styles.balanceInfo,
+                  ...(isMobile ? { gap: 10, marginBottom: 10 } : {}),
+                }}
+              >
                 <div
                   style={{
                     ...styles.balanceIcon,
+                    ...(isMobile ? { width: 36, height: 36 } : {}),
                     backgroundColor:
                       myBalance > 0
                         ? '#dcfce7'
@@ -662,18 +748,26 @@ const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
                   }}
                 >
                   {myBalance > 0 ? (
-                    <TrendingUp size={20} color="#16a34a" />
+                    <TrendingUp size={isMobile ? 16 : 20} color="#16a34a" />
                   ) : myBalance < 0 ? (
-                    <TrendingDown size={20} color="#dc2626" />
+                    <TrendingDown size={isMobile ? 16 : 20} color="#dc2626" />
                   ) : (
-                    <CheckCircle size={20} color="#6b7280" />
+                    <CheckCircle size={isMobile ? 16 : 20} color="#6b7280" />
                   )}
                 </div>
                 <div>
-                  <h3 style={styles.balanceLabel}>Your Balance</h3>
+                  <h3
+                    style={{
+                      ...styles.balanceLabel,
+                      ...(isMobile ? { fontSize: 13 } : {}),
+                    }}
+                  >
+                    Your Balance
+                  </h3>
                   <p
                     style={{
                       ...styles.balanceAmount,
+                      ...(isMobile ? { fontSize: 20 } : {}),
                       color:
                         myBalance > 0
                           ? '#16a34a'
@@ -691,16 +785,17 @@ const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
                 <div
                   style={{
                     ...styles.balanceDetail,
+                    ...(isMobile ? { fontSize: 13, padding: 10 } : {}),
                     color: '#166534',
                     backgroundColor: '#f0fdf4',
                   }}
                 >
-                  <p style={{ fontWeight: '500', margin: '0 0 4px 0' }}>
+                  <p style={{ fontWeight: 500, margin: '0 0 4px 0' }}>
                     You spent more
                   </p>
                   <p style={{ margin: 0 }}>
                     {Object.entries(balances)
-                      .filter(([userId, bal]) => bal < 0 && userId !== user?.id) // FIXED: using user.id
+                      .filter(([userId, bal]) => bal < 0 && userId !== user?.id)
                       .map(([userId, bal]) => {
                         const username = getUsername(userId);
                         const amountOwed = Math.abs(bal);
@@ -717,11 +812,12 @@ const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
                 <div
                   style={{
                     ...styles.balanceDetail,
+                    ...(isMobile ? { fontSize: 13, padding: 10 } : {}),
                     color: '#991b1b',
                     backgroundColor: '#fef2f2',
                   }}
                 >
-                  <p style={{ fontWeight: '500', margin: '0 0 4px 0' }}>
+                  <p style={{ fontWeight: 500, margin: '0 0 4px 0' }}>
                     You spent less
                   </p>
                   <p style={{ margin: 0 }}>
@@ -743,42 +839,84 @@ const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
                 <div
                   style={{
                     ...styles.balanceDetail,
+                    ...(isMobile
+                      ? { fontSize: 13, padding: 10, gap: 6 }
+                      : { gap: 8 }),
                     color: '#6b7280',
                     backgroundColor: '#f9fafb',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
                   }}
                 >
-                  <CheckCircle size={16} color="#16a34a" />
+                  <CheckCircle size={isMobile ? 14 : 16} color="#16a34a" />
                   <span>You're all settled up!</span>
                 </div>
               )}
             </div>
 
             {/* Quick Stats */}
-            <div style={styles.statsGrid}>
-              <div style={{ ...styles.statCard, ...styles.statCardPurple }}>
+            <div
+              style={{
+                ...styles.statsGrid,
+                ...(isMobile ? { gap: 12 } : {}),
+              }}
+            >
+              <div
+                style={{
+                  ...styles.statCard,
+                  ...styles.statCardPurple,
+                  ...(isMobile ? { padding: 12 } : {}),
+                }}
+              >
                 <div>
-                  <p style={styles.statLabel}>
+                  <p
+                    style={{
+                      ...styles.statLabel,
+                      ...(isMobile ? { fontSize: 12 } : {}),
+                    }}
+                  >
                     Total Expense Since Last Settlement
                   </p>
-                  <p style={{ ...styles.statValue, color: '#7c3aed' }}>
+                  <p
+                    style={{
+                      ...styles.statValue,
+                      ...(isMobile ? { fontSize: 18 } : {}),
+                      color: '#7c3aed',
+                    }}
+                  >
                     {formatCurrency(recentTotal)}
                   </p>
                 </div>
-                <DollarSign size={32} color="#a855f7" />
+                <DollarSign size={isMobile ? 28 : 32} color="#a855f7" />
               </div>
-              <div style={{ ...styles.statCard, ...styles.statCardOrange }}>
+
+              <div
+                style={{
+                  ...styles.statCard,
+                  ...styles.statCardOrange,
+                  ...(isMobile ? { padding: 12 } : {}),
+                }}
+              >
                 <div>
-                  <p style={styles.statLabel}>
+                  <p
+                    style={{
+                      ...styles.statLabel,
+                      ...(isMobile ? { fontSize: 12 } : {}),
+                    }}
+                  >
                     Transactions Since Last Settlement
                   </p>
-                  <p style={{ ...styles.statValue, color: '#ea580c' }}>
+                  <p
+                    style={{
+                      ...styles.statValue,
+                      ...(isMobile ? { fontSize: 18 } : {}),
+                      color: '#ea580c',
+                    }}
+                  >
                     {recentSumTransactions}
                   </p>
                 </div>
-                <FileText size={32} color="#fb923c" />
+                <FileText size={isMobile ? 28 : 32} color="#fb923c" />
               </div>
             </div>
           </div>
@@ -816,6 +954,141 @@ const TransactionList = ({ groupId, members: allGroupMembers = [] }) => {
               <p style={styles.emptySubtitle}>
                 Start by adding your first expense!
               </p>
+            </div>
+          ) : isMobile ? (
+            // ======= MOBILE CARD LIST =======
+            <div style={{ padding: 12 }}>
+              {transactions.map((tx) => {
+                const isSettlement =
+                  tx.isSettlement ||
+                  tx.category?.toLowerCase() === 'settlement';
+                const isOwedToPurchaser = tx.owedToPurchaser && !isSettlement;
+
+                return (
+                  <div
+                    key={tx._id}
+                    style={{
+                      padding: 12,
+                      marginBottom: 12,
+                      borderRadius: 12,
+                      border: '1px solid #e5e7eb',
+                      background: 'white',
+                      ...(isSettlement ? styles.settlementRow : {}),
+                      ...(isOwedToPurchaser ? styles.owedToPurchaserRow : {}),
+                    }}
+                  >
+                    {/* Top line: description */}
+                    <div
+                      style={{
+                        ...styles.transactionDescription,
+                        ...(isSettlement ? styles.settlementDescription : {}),
+                        ...(isOwedToPurchaser
+                          ? styles.owedToPurchaserDescription
+                          : {}),
+                        marginBottom: 6,
+                      }}
+                    >
+                      {isSettlement
+                        ? 'Settlement Payment'
+                        : tx.description || 'No description'}
+                    </div>
+                    {tx.notes && (
+                      <div style={styles.transactionNotes}>{tx.notes}</div>
+                    )}
+
+                    {/* Middle: category + amount */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginTop: 8,
+                        gap: 12,
+                      }}
+                    >
+                      <div style={styles.categoryContainer}>
+                        <span style={{ fontSize: 18 }}>
+                          {isSettlement ? '💰' : getCategoryIcon(tx.category)}
+                        </span>
+                        <span style={styles.categoryText}>
+                          {isSettlement
+                            ? 'Settlement'
+                            : tx.category || 'Uncategorized'}
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          ...styles.amountText,
+                          ...(isSettlement ? styles.settlementAmount : {}),
+                          ...(isOwedToPurchaser
+                            ? styles.owedToPurchaserAmount
+                            : {}),
+                        }}
+                      >
+                        {formatCurrency(tx.amount)}
+                        {isOwedToPurchaser && (
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: '#92400e',
+                              fontWeight: 600,
+                              marginTop: 2,
+                              textAlign: 'right',
+                            }}
+                          >
+                            Owed full amount
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bottom: paid by + date */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginTop: 10,
+                        gap: 12,
+                      }}
+                    >
+                      <div style={styles.userContainer}>
+                        <div
+                          style={{
+                            ...styles.userAvatar,
+                            ...(isSettlement
+                              ? {
+                                  background:
+                                    'linear-gradient(135deg, #16a34a 0%, #22c55e 100%)',
+                                }
+                              : isOwedToPurchaser
+                              ? {
+                                  background:
+                                    'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
+                                }
+                              : {}),
+                          }}
+                        >
+                          <User size={16} color="white" />
+                        </div>
+                        <span style={styles.userName}>
+                          {tx.paidBy?.username || 'Unknown'}
+                        </span>
+                      </div>
+
+                      <div style={styles.dateContainer}>
+                        <Calendar size={16} />
+                        {new Date(tx.date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>

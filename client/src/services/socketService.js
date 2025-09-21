@@ -83,14 +83,14 @@ class SocketService {
       this.socket = io(this.SOCKET_URL, socketOptions);
 
       this.socket.once('connect', () => {
-        console.log('Socket connected successfully');
+        //console.log('Socket connected successfully');
         this.isConnecting = false;
         this.processPendingEmits();
         resolve(this.socket);
       });
 
       this.socket.once('connect_error', (error) => {
-        console.error('Socket connection failed:', error);
+        //console.error('Socket connection failed:', error);
         this.isConnecting = false;
         reject(error);
       });
@@ -101,10 +101,10 @@ class SocketService {
 
   // Process queued events after connection
   processPendingEmits() {
-    console.log(`Processing ${this.pendingEmits.length} pending emits`);
+    //console.log(`Processing ${this.pendingEmits.length} pending emits`);
     while (this.pendingEmits.length > 0) {
       const { event, data } = this.pendingEmits.shift();
-      console.log(`Emitting queued event: ${event}`);
+      //console.log(`Emitting queued event: ${event}`);
       this.socket.emit(event, data);
     }
   }
@@ -130,7 +130,7 @@ class SocketService {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
     } else {
-      console.warn(`Socket not connected. Queueing event: ${event}`);
+      //console.warn(`Socket not connected. Queueing event: ${event}`);
       // Queue the emit for when connection is established
       this.pendingEmits.push({ event, data });
 
@@ -197,12 +197,12 @@ class SocketService {
 
   // Room management methods
   joinRoom(roomId) {
-    console.log(`Attempting to join room: ${roomId}`);
+    //console.log(`Attempting to join room: ${roomId}`);
     this.emit('join-room', roomId);
   }
 
   leaveRoom(roomId) {
-    console.log(`Leaving room: ${roomId}`);
+    //console.log(`Leaving room: ${roomId}`);
     this.emit('leave-room', roomId);
   }
 

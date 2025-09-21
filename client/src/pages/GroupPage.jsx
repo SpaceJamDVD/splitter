@@ -324,6 +324,34 @@ const GroupPage = () => {
       width: '100%',
       justifyContent: 'center',
     },
+    actionsContainer: {
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'stretch', // make children stretch full width
+      gap: '8px',
+    },
+
+    headerButtons: {
+      display: 'flex',
+      gap: '10px',
+      justifyContent: 'flex-end', // keep buttons aligned right
+    },
+
+    infoBlock: {
+      width: '100%', // span full width of container
+      padding: '10px 14px',
+      borderRadius: '6px',
+      backgroundColor: '#fef3c7', // soft amber background
+      border: '1px solid #fcd34d',
+    },
+
+    infoText: {
+      margin: 0,
+      fontSize: '14px',
+      fontWeight: 500,
+      color: '#92400e',
+      textAlign: 'center', // centers the message nicely
+    },
   };
 
   // Add keyframe animation for modal
@@ -393,72 +421,64 @@ const GroupPage = () => {
               <p style={styles.description}>{group.description}</p>
             </div>
 
-            <div style={styles.headerButtons}>
-              <button
-                onClick={() => setShowMembers(!showMembers)}
-                style={{
-                  ...styles.membersToggle,
-                }}
-              >
-                <Users size={16} />
-                {showMembers ? 'Hide' : 'Show'} Members (
-                {group.members?.length || 0})
-              </button>
-
-              {showInviteButton && (
+            {/* Buttons + info message grouped together */}
+            <div style={styles.actionsContainer}>
+              <div style={styles.headerButtons}>
                 <button
-                  onClick={() => setShowModal(true)}
-                  style={{ ...styles.button, ...styles.inviteButton }}
-                  onMouseEnter={(e) =>
-                    Object.assign(e.target.style, styles.buttonHover)
-                  }
-                  onMouseLeave={(e) =>
-                    Object.assign(e.target.style, {
-                      ...styles.button,
-                      ...styles.inviteButton,
-                    })
-                  }
+                  onClick={() => setShowMembers(!showMembers)}
+                  style={{ ...styles.membersToggle }}
                 >
-                  <UserPlus size={16} />
-                  Invite Member
+                  <Users size={16} />
+                  {showMembers ? 'Hide' : 'Show'} Members (
+                  {group.members?.length || 0})
                 </button>
-              )}
 
-              <button
-                onClick={() => {
-                  if (canAddTransaction) setShowTransactionModal(true);
-                }}
-                disabled={!canAddTransaction}
-                title={
-                  !canAddTransaction
-                    ? 'You can add transactions once your partner joins.'
-                    : ''
-                }
-                style={{
-                  ...styles.button,
-                  ...styles.transactionButton,
-                  ...(canAddTransaction
-                    ? {}
-                    : { background: '#9ca3af', cursor: 'not-allowed' }),
-                }}
-                onMouseEnter={(e) => {
-                  if (canAddTransaction) {
-                    e.target.style.transform = 'translateY(-2px)';
-                    e.target.style.boxShadow =
-                      '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (canAddTransaction) {
-                    e.target.style.transform = 'translateY(0)';
-                    e.target.style.boxShadow =
-                      '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
-                  }
-                }}
-              >
-                <Plus size={16} />
-                Add Transaction
-              </button>
+                {showInviteButton && (
+                  <button
+                    onClick={() => setShowModal(true)}
+                    style={{ ...styles.button, ...styles.inviteButton }}
+                    onMouseEnter={(e) =>
+                      Object.assign(e.target.style, styles.buttonHover)
+                    }
+                    onMouseLeave={(e) =>
+                      Object.assign(e.target.style, {
+                        ...styles.button,
+                        ...styles.inviteButton,
+                      })
+                    }
+                  >
+                    <UserPlus size={16} />
+                    Invite Member
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    if (canAddTransaction) setShowTransactionModal(true);
+                  }}
+                  disabled={!canAddTransaction}
+                  style={{
+                    ...styles.button,
+                    ...styles.transactionButton,
+                    ...(canAddTransaction
+                      ? {}
+                      : { background: '#9ca3af', cursor: 'not-allowed' }),
+                  }}
+                >
+                  <Plus size={16} />
+                  Add Transaction
+                </button>
+              </div>
+
+              {/* Full-width info block under buttons */}
+              {!canAddTransaction && (
+                <div style={styles.infoBlock}>
+                  <p style={styles.infoText}>
+                    You’ll be able to add transactions once your partner joins
+                    this group.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -175,7 +175,9 @@ const TransactionList = ({
     socketService.on('group-settled', handleGroupSettled);
 
     // If already connected, join room immediately
-    if (socketService.isConnected()) {
+    if (!socketService.isConnected()) {
+      socketService.connect();
+    } else {
       handleConnect();
     }
 

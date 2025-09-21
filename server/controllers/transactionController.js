@@ -7,6 +7,54 @@ const Group = require('../models/Group');
 const Budget = require('../models/Budget');
 
 class TransactionController {
+  static async recalculateGroupBalances(groupId) {
+    // Reset all balances
+    await MemberBalance.updateMany({ groupId }, { $set: { balance: 0 } });
+
+    // Get all transactions + group
+    const [transactions, group] = await Promise.all([
+      Transaction.find({ groupId }),
+      Group.findById(groupId),
+    ]);
+
+    if (!group) return; // no-op if group deleted
+
+    const memberIds = group.members.map((id) => id.toString());
+
+    for (const tx of transactions) {
+      const payerId = tx.paidBy.toString();
+      const amount = tx.amount;
+
+      if (tx.owedToPurchaser) {
+        const nonPayers = memberIds.filter((id) => id !== payerId);
+        const share = amount / nonPayers.length;
+
+        for (const memberId of nonPayers) {
+          await MemberBalance.findOneAndUpdate(
+            { groupId, memberId },
+            { $inc: { balance: -share } },
+            { upsert: true }
+          );
+        }
+        await MemberBalance.findOneAndUpdate(
+          { groupId, memberId: payerId },
+          { $inc: { balance: amount } },
+          { upsert: true }
+        );
+      } else {
+        const share = amount / memberIds.length;
+        for (const memberId of memberIds) {
+          const inc = memberId === payerId ? amount - share : -share;
+          await MemberBalance.findOneAndUpdate(
+            { groupId, memberId },
+            { $inc: { balance: inc } },
+            { upsert: true }
+          );
+        }
+      }
+    }
+  }
+
   async createTransaction(req, res) {
     const userId = req.user.userId;
     const { groupId, amount, description, notes, category, owedToPurchaser } =
@@ -246,81 +294,170 @@ class TransactionController {
     const userId = req.user.userId;
 
     try {
+      // Load the transaction (with payer info for notification text)
       const transaction = await Transaction.findById(transactionId).populate(
         'paidBy',
         'username email'
       );
+
       if (!transaction) {
         return res.status(404).json({ error: 'Transaction not found' });
       }
 
-      // Check if user has permission to delete
+      // Permission check: only the payer can delete (same policy as update)
       if (transaction.paidBy._id.toString() !== userId) {
         return res
           .status(403)
           .json({ error: 'Not authorized to delete this transaction' });
       }
 
+      // Prevent deletion of settlements (to avoid breaking the settlement boundary)
       if (transaction.isSettlement || transaction.hasBeenSettled) {
-        return res
-          .status(400)
-          .json({
-            error:
-              'This transaction cannot be deleted because it is a settlement or has already been settled.',
-          });
+        return res.status(400).json({
+          error:
+            'This transaction cannot be deleted because it is a settlement or has already been settled.',
+        });
       }
 
-      const groupId = transaction.groupId;
+      const groupId = transaction.groupId.toString();
 
-      // Delete the transaction
+      // --- Mirror createTransaction balance effects (apply the inverse) ---
+      const group = await Group.findById(groupId);
+      if (!group) {
+        // If the group is gone, delete the tx and return (no balances to fix)
+        await Transaction.findByIdAndDelete(transactionId);
+        return res.json({ message: 'Transaction deleted (group missing).' });
+      }
+
+      const memberIds = group.members.map((id) => id.toString());
+      const payerId = transaction.paidBy._id.toString();
+      const amount = transaction.amount;
+      const owedToPurchaser = !!transaction.owedToPurchaser;
+
+      if (owedToPurchaser) {
+        // In createTransaction we did:
+        //  - nonPayers: $inc { balance: -share }
+        //  - payer:     $inc { balance:  amount }
+        // To undo, we do the exact inverse:
+        const nonPayers = memberIds.filter((id) => id !== payerId);
+        const share = amount / (nonPayers.length || 1); // guard divide-by-zero
+
+        for (const memberId of nonPayers) {
+          await MemberBalance.findOneAndUpdate(
+            { groupId, memberId },
+            { $inc: { balance: +share } }, // inverse of -share
+            { upsert: true }
+          );
+        }
+        await MemberBalance.findOneAndUpdate(
+          { groupId, memberId: payerId },
+          { $inc: { balance: -amount } }, // inverse of +amount
+          { upsert: true }
+        );
+      } else {
+        // In createTransaction we did even split:
+        //  - payer:  $inc { balance: amount - share }
+        //  - others: $inc { balance: -share }
+        // Undo that:
+        const share = amount / (memberIds.length || 1);
+
+        for (const memberId of memberIds) {
+          if (memberId === payerId) {
+            await MemberBalance.findOneAndUpdate(
+              { groupId, memberId },
+              { $inc: { balance: -(amount - share) } }, // inverse
+              { upsert: true }
+            );
+          } else {
+            await MemberBalance.findOneAndUpdate(
+              { groupId, memberId },
+              { $inc: { balance: +share } }, // inverse
+              { upsert: true }
+            );
+          }
+        }
+      }
+
+      // Now actually delete the transaction record
       await Transaction.findByIdAndDelete(transactionId);
 
-      // ========== SOCKET.IO IMPLEMENTATION ==========
+      try {
+        const io = req.app.get('io');
 
+        if (transaction.category && io) {
+          const budgetController = require('./budgetController');
+
+          if (
+            typeof budgetController.checkBudgetImpactForDeletion === 'function'
+          ) {
+            await budgetController.checkBudgetImpactForDeletion(
+              groupId,
+              transaction.category,
+              transaction.amount,
+              transaction, // the deleted tx
+              io
+            );
+          } else if (
+            typeof budgetController.checkBudgetImpactForTransaction ===
+            'function'
+          ) {
+            // Pass a negative amount to "undo" the spend from the category
+            await budgetController.checkBudgetImpactForTransaction(
+              groupId,
+              transaction.category,
+              -Math.abs(transaction.amount),
+              transaction,
+              io
+            );
+          }
+        }
+      } catch (budgetErr) {
+        console.error('Budget hook on delete failed:', budgetErr);
+        // non-fatal
+      }
+
+      // --- Socket.io mirror of createTransaction ---
       const io = req.app.get('io');
       if (io) {
-        io.to(`group-${groupId}`).emit('transaction-update', {
-          type: 'deleted',
-          transactionId: transactionId,
-          groupId: groupId,
-          timestamp: new Date().toISOString(),
-        });
-
-        // Get updated balances after deletion
         try {
+          // 1) Transaction change event
+          io.to(`group-${groupId}`).emit('transaction-update', {
+            type: 'deleted',
+            transactionId,
+            groupId,
+            timestamp: new Date().toISOString(),
+          });
+
+          // 2) Emit updated balances (after our inverse updates)
           const updatedBalances = await MemberBalance.find({
             groupId,
           }).populate('memberId', 'username email');
 
           io.to(`group-${groupId}`).emit('balance-update', {
-            groupId: groupId,
+            groupId,
             balances: updatedBalances,
             timestamp: new Date().toISOString(),
           });
-        } catch (balanceError) {
-          console.error(
-            'Failed to emit balance update after deletion:',
-            balanceError
-          );
-        }
 
-        // Emit notification
-        io.to(`group-${groupId}`).emit('notification', {
-          id: Date.now(),
-          type: 'transaction',
-          message: `${transaction.paidBy.username} deleted an expense: ${
-            transaction.description || 'Transaction'
-          }`,
-          groupId: groupId,
-          timestamp: new Date().toISOString(),
-        });
+          // 3) Notification (same style as create/update)
+          io.to(`group-${groupId}`).emit('notification', {
+            id: Date.now(),
+            type: 'transaction',
+            message: `${transaction.paidBy.username} deleted an expense: ${
+              transaction.description || 'Transaction'
+            }`,
+            groupId,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (socketErr) {
+          console.error('Socket emit failed after deletion:', socketErr);
+        }
       }
 
-      // ===============================================
-
-      res.json({ message: 'Transaction deleted successfully' });
+      return res.json({ message: 'Transaction deleted successfully' });
     } catch (err) {
-      res.status(500).json({
+      console.error('deleteTransaction failed:', err);
+      return res.status(500).json({
         error: 'Failed to delete transaction',
         details: err.message,
       });
@@ -472,64 +609,6 @@ class TransactionController {
         error: 'Failed to settle up',
         details: err.message,
       });
-    }
-  }
-
-  // Helper method to recalculate balances
-  async recalculateGroupBalances(groupId) {
-    try {
-      // Reset all balances
-      await MemberBalance.updateMany({ groupId }, { $set: { balance: 0 } });
-
-      // Get all transactions for the group
-      const transactions = await Transaction.find({ groupId });
-      const group = await Group.findById(groupId);
-
-      // Recalculate based on all transactions
-      for (const transaction of transactions) {
-        const memberIds = group.members.map((id) => id.toString());
-        const payerId = transaction.paidBy.toString();
-        const amount = transaction.amount;
-
-        if (transaction.owedToPurchaser) {
-          const nonPayers = memberIds.filter((id) => id !== payerId);
-          const share = amount / nonPayers.length;
-
-          for (const memberId of nonPayers) {
-            await MemberBalance.findOneAndUpdate(
-              { groupId, memberId },
-              { $inc: { balance: -share } },
-              { upsert: true }
-            );
-          }
-
-          await MemberBalance.findOneAndUpdate(
-            { groupId, memberId: payerId },
-            { $inc: { balance: amount } },
-            { upsert: true }
-          );
-        } else {
-          const share = amount / memberIds.length;
-
-          for (const memberId of memberIds) {
-            if (memberId === payerId) {
-              await MemberBalance.findOneAndUpdate(
-                { groupId, memberId },
-                { $inc: { balance: amount - share } },
-                { upsert: true }
-              );
-            } else {
-              await MemberBalance.findOneAndUpdate(
-                { groupId, memberId },
-                { $inc: { balance: -share } },
-                { upsert: true }
-              );
-            }
-          }
-        }
-      }
-    } catch (err) {
-      throw err;
     }
   }
 

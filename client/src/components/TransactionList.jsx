@@ -18,6 +18,7 @@ import {
   TrendingDown,
   CheckCircle,
   Loader,
+  MoreVertical,
 } from 'lucide-react';
 
 const TransactionList = ({
@@ -42,6 +43,7 @@ const TransactionList = ({
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [recentTotal, setRecentTotal] = useState(0);
   const [recentSumTransactions, setRecentSumTransactions] = useState(0);
+  const [openMenuId, setOpenMenuId] = useState(null);
 
   // Memoized data fetching functions
   const fetchRecentTotal = useCallback(async () => {
@@ -572,6 +574,31 @@ const TransactionList = ({
       fontSize: '14px',
       color: '#6b7280',
     },
+    dropdownMenu: {
+      position: 'absolute',
+      top: '100%',
+      right: 0,
+      marginTop: 6,
+      background: 'white',
+      border: '1px solid #e5e7eb',
+      borderRadius: 8,
+      boxShadow: '0 4px 6px rgba(0,0,0,0.1), 0 10px 15px rgba(0,0,0,0.05)',
+      zIndex: 20,
+      minWidth: 180,
+      padding: '6px 0',
+    },
+    dropdownItem: {
+      display: 'block',
+      width: '100%',
+      padding: '10px 14px',
+      fontSize: 14,
+      textAlign: 'left',
+      background: 'transparent',
+      border: 'none',
+      cursor: 'pointer',
+      color: '#374151', // gray-700
+      transition: 'all 0.15s ease',
+    },
   };
 
   // Loading states
@@ -976,23 +1003,80 @@ const TransactionList = ({
                       background: 'white',
                       ...(isSettlement ? styles.settlementRow : {}),
                       ...(isOwedToPurchaser ? styles.owedToPurchaserRow : {}),
+                      position: 'relative',
                     }}
                   >
-                    {/* Top line: description */}
+                    {/* Top line: description + menu */}
                     <div
                       style={{
-                        ...styles.transactionDescription,
-                        ...(isSettlement ? styles.settlementDescription : {}),
-                        ...(isOwedToPurchaser
-                          ? styles.owedToPurchaserDescription
-                          : {}),
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
                         marginBottom: 6,
                       }}
                     >
-                      {isSettlement
-                        ? 'Settlement Payment'
-                        : tx.description || 'No description'}
+                      <div
+                        style={{
+                          ...styles.transactionDescription,
+                          ...(isSettlement ? styles.settlementDescription : {}),
+                          ...(isOwedToPurchaser
+                            ? styles.owedToPurchaserDescription
+                            : {}),
+                        }}
+                      >
+                        {isSettlement
+                          ? 'Settlement Payment'
+                          : tx.description || 'No description'}
+                      </div>
+
+                      {/* Action menu button */}
+                      <div style={{ position: 'relative' }}>
+                        <button
+                          onClick={() =>
+                            setOpenMenuId(openMenuId === tx._id ? null : tx._id)
+                          }
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: 6,
+                            borderRadius: 6,
+                            transition: 'background 0.15s ease',
+                          }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.backgroundColor = '#f3f4f6')
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              'transparent')
+                          }
+                        >
+                          <MoreVertical size={18} color="#6b7280" />
+                        </button>
+
+                        {openMenuId === tx._id && (
+                          <div style={styles.dropdownMenu}>
+                            <button
+                              style={styles.dropdownItem}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor =
+                                  '#f3f4f6';
+                                e.currentTarget.style.color = '#111827';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor =
+                                  'transparent';
+                                e.currentTarget.style.color = '#374151';
+                              }}
+                              onClick={() => alert('Delete')}
+                            >
+                              Delete Transaction
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
+
                     {tx.notes && (
                       <div style={styles.transactionNotes}>{tx.notes}</div>
                     )}
@@ -1092,6 +1176,7 @@ const TransactionList = ({
               })}
             </div>
           ) : (
+            // ======= DESKTOP TABLE =======
             <div style={{ overflowX: 'auto' }}>
               <table style={styles.table}>
                 <thead style={styles.tableHeader}>
@@ -1101,6 +1186,7 @@ const TransactionList = ({
                     <th style={styles.tableHeaderCell}>Amount</th>
                     <th style={styles.tableHeaderCell}>Paid By</th>
                     <th style={styles.tableHeaderCell}>Date</th>
+                    <th style={styles.tableHeaderCell}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1232,6 +1318,35 @@ const TransactionList = ({
                               day: 'numeric',
                               year: 'numeric',
                             })}
+                          </div>
+                        </td>
+                        <td style={{ ...styles.tableCell, textAlign: 'right' }}>
+                          <div style={{ position: 'relative' }}>
+                            <button
+                              onClick={() =>
+                                setOpenMenuId(
+                                  openMenuId === tx._id ? null : tx._id
+                                )
+                              }
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: 4,
+                              }}
+                            >
+                              <MoreVertical size={18} color="#6b7280" />
+                            </button>
+                            {openMenuId === tx._id && (
+                              <div style={styles.dropdownMenu}>
+                                <button
+                                  style={styles.dropdownItem}
+                                  onClick={() => alert('Delete')}
+                                >
+                                  Delete Transaction
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>

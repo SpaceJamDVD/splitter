@@ -4,6 +4,8 @@ import { io } from 'socket.io-client';
 class SocketService {
   socket = null;
   listeners = new Map();
+  pendingEmits = [];
+  isConnecting = false;
 
   constructor() {
     this.SOCKET_URL =
@@ -15,6 +17,13 @@ class SocketService {
     if (this.socket?.connected) {
       return this.socket;
     }
+
+    // Prevent multiple connection attempts
+    if (this.isConnecting) {
+      return this.socket;
+    }
+
+    this.isConnecting = true;
 
     const socketOptions = {
       transports: ['websocket', 'polling'],
@@ -31,7 +40,73 @@ class SocketService {
     // Setup connection event listeners
     this.setupConnectionListeners();
 
+    // Process pending emits when connected
+    this.socket.on('connect', () => {
+      console.log('Socket connected successfully');
+      this.isConnecting = false;
+      this.processPendingEmits();
+    });
+
     return this.socket;
+  }
+
+  // Alternative: Connect with Promise (use this OR the regular connect, not both)
+  connectAsync(token = null) {
+    if (this.socket?.connected) {
+      return Promise.resolve(this.socket);
+    }
+
+    if (this.isConnecting) {
+      // Wait for existing connection attempt
+      return new Promise((resolve) => {
+        const checkConnection = setInterval(() => {
+          if (this.socket?.connected) {
+            clearInterval(checkConnection);
+            resolve(this.socket);
+          }
+        }, 100);
+      });
+    }
+
+    this.isConnecting = true;
+
+    return new Promise((resolve, reject) => {
+      const socketOptions = {
+        transports: ['websocket', 'polling'],
+        withCredentials: true,
+      };
+
+      if (token) {
+        socketOptions.auth = { token };
+      }
+
+      this.socket = io(this.SOCKET_URL, socketOptions);
+
+      this.socket.once('connect', () => {
+        console.log('Socket connected successfully');
+        this.isConnecting = false;
+        this.processPendingEmits();
+        resolve(this.socket);
+      });
+
+      this.socket.once('connect_error', (error) => {
+        console.error('Socket connection failed:', error);
+        this.isConnecting = false;
+        reject(error);
+      });
+
+      this.setupConnectionListeners();
+    });
+  }
+
+  // Process queued events after connection
+  processPendingEmits() {
+    console.log(`Processing ${this.pendingEmits.length} pending emits`);
+    while (this.pendingEmits.length > 0) {
+      const { event, data } = this.pendingEmits.shift();
+      console.log(`Emitting queued event: ${event}`);
+      this.socket.emit(event, data);
+    }
   }
 
   // Disconnect from socket server
@@ -40,6 +115,8 @@ class SocketService {
       this.socket.disconnect();
       this.socket = null;
       this.listeners.clear();
+      this.pendingEmits = [];
+      this.isConnecting = false;
     }
   }
 
@@ -53,7 +130,14 @@ class SocketService {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
     } else {
-      console.warn('Socket not connected. Cannot emit event:', event);
+      console.warn(`Socket not connected. Queueing event: ${event}`);
+      // Queue the emit for when connection is established
+      this.pendingEmits.push({ event, data });
+
+      // Try to connect if not already attempting
+      if (!this.isConnecting && !this.socket) {
+        this.connect();
+      }
     }
   }
 
@@ -98,19 +182,27 @@ class SocketService {
   setupConnectionListeners() {
     this.socket.on('connect_error', (error) => {
       console.error('Connection error:', error);
+      this.isConnecting = false;
     });
 
     this.socket.on('reconnect_error', (error) => {
       console.error('Reconnection error:', error);
     });
+
+    this.socket.on('disconnect', (reason) => {
+      console.log('Socket disconnected:', reason);
+      this.isConnecting = false;
+    });
   }
 
   // Room management methods
   joinRoom(roomId) {
+    console.log(`Attempting to join room: ${roomId}`);
     this.emit('join-room', roomId);
   }
 
   leaveRoom(roomId) {
+    console.log(`Leaving room: ${roomId}`);
     this.emit('leave-room', roomId);
   }
 
@@ -161,9 +253,35 @@ class SocketService {
 
   // Method to manually reconnect
   reconnect() {
-    if (this.socket) {
+    if (this.socket && !this.socket.connected) {
       this.socket.connect();
+    } else if (!this.socket) {
+      this.connect();
     }
+  }
+
+  // Wait for connection (utility method)
+  waitForConnection(timeout = 5000) {
+    return new Promise((resolve, reject) => {
+      if (this.socket?.connected) {
+        resolve();
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        reject(new Error('Socket connection timeout'));
+      }, timeout);
+
+      if (this.socket) {
+        this.socket.once('connect', () => {
+          clearTimeout(timer);
+          resolve();
+        });
+      } else {
+        clearTimeout(timer);
+        reject(new Error('Socket not initialized'));
+      }
+    });
   }
 }
 

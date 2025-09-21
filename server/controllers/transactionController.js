@@ -543,6 +543,21 @@ class TransactionController {
         });
       }
 
+      // find all transactions in this group, newest first
+      const allTx = await Transaction.find({ groupId }).sort({ date: -1 });
+
+      // walk from newest → oldest until we hit a settlement
+      for (const tx of allTx) {
+        if (tx.isSettlement) {
+          break; // stop at the last settlement boundary
+        }
+        // mark this transaction as settled
+        if (!tx.hasBeenSettled) {
+          tx.hasBeenSettled = true;
+          await tx.save();
+        }
+      }
+
       // create settlement transaction
       const settlementTransaction = new Transaction({
         groupId: new mongoose.Types.ObjectId(groupId),

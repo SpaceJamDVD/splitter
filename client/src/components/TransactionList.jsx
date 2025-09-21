@@ -1044,51 +1044,47 @@ const TransactionList = ({
                       </div>
 
                       {/* Action menu button */}
-                      <div style={{ position: 'relative' }}>
-                        <button
-                          onClick={() =>
-                            setOpenMenuId(openMenuId === tx._id ? null : tx._id)
-                          }
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            cursor: 'pointer',
-                            padding: 6,
-                            borderRadius: 6,
-                            transition: 'background 0.15s ease',
-                          }}
-                          onMouseEnter={(e) =>
-                            (e.currentTarget.style.backgroundColor = '#f3f4f6')
-                          }
-                          onMouseLeave={(e) =>
-                            (e.currentTarget.style.backgroundColor =
-                              'transparent')
-                          }
-                        >
-                          <MoreVertical size={18} color="#6b7280" />
-                        </button>
+                      {/* Action menu button */}
+                      {!(tx.isSettlement || tx.hasBeenSettled) && (
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            onClick={() =>
+                              setOpenMenuId(
+                                openMenuId === tx._id ? null : tx._id
+                              )
+                            }
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: 6,
+                              borderRadius: 6,
+                              transition: 'background 0.15s ease',
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                '#f3f4f6')
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                'transparent')
+                            }
+                          >
+                            <MoreVertical size={18} color="#6b7280" />
+                          </button>
 
-                        {openMenuId === tx._id && (
-                          <div style={styles.dropdownMenu}>
-                            <button
-                              style={styles.dropdownItem}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor =
-                                  '#f3f4f6';
-                                e.currentTarget.style.color = '#111827';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor =
-                                  'transparent';
-                                e.currentTarget.style.color = '#374151';
-                              }}
-                              onClick={() => handleDeleteTransaction(tx._id)}
-                            >
-                              Delete Transaction
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                          {openMenuId === tx._id && (
+                            <div style={styles.dropdownMenu}>
+                              <button
+                                style={styles.dropdownItem}
+                                onClick={() => handleDeleteTransaction(tx._id)}
+                              >
+                                Delete Transaction
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {tx.notes && (
@@ -1335,35 +1331,37 @@ const TransactionList = ({
                           </div>
                         </td>
                         <td style={{ ...styles.tableCell, textAlign: 'right' }}>
-                          <div style={{ position: 'relative' }}>
-                            <button
-                              onClick={() =>
-                                setOpenMenuId(
-                                  openMenuId === tx._id ? null : tx._id
-                                )
-                              }
-                              style={{
-                                background: 'transparent',
-                                border: 'none',
-                                cursor: 'pointer',
-                                padding: 4,
-                              }}
-                            >
-                              <MoreVertical size={18} color="#6b7280" />
-                            </button>
-                            {openMenuId === tx._id && (
-                              <div style={styles.dropdownMenu}>
-                                <button
-                                  style={styles.dropdownItem}
-                                  onClick={() =>
-                                    handleDeleteTransaction(tx._id)
-                                  }
-                                >
-                                  Delete Transaction
-                                </button>
-                              </div>
-                            )}
-                          </div>
+                          {!(tx.isSettlement || tx.hasBeenSettled) && (
+                            <div style={{ position: 'relative' }}>
+                              <button
+                                onClick={() =>
+                                  setOpenMenuId(
+                                    openMenuId === tx._id ? null : tx._id
+                                  )
+                                }
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  padding: 4,
+                                }}
+                              >
+                                <MoreVertical size={18} color="#6b7280" />
+                              </button>
+                              {openMenuId === tx._id && (
+                                <div style={styles.dropdownMenu}>
+                                  <button
+                                    style={styles.dropdownItem}
+                                    onClick={() =>
+                                      handleDeleteTransaction(tx._id)
+                                    }
+                                  >
+                                    Delete Transaction
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );

@@ -261,6 +261,15 @@ class TransactionController {
           .json({ error: 'Not authorized to delete this transaction' });
       }
 
+      if (transaction.isSettlement || transaction.hasBeenSettled) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'This transaction cannot be deleted because it is a settlement or has already been settled.',
+          });
+      }
+
       const groupId = transaction.groupId;
 
       // Delete the transaction
@@ -403,6 +412,7 @@ class TransactionController {
         amount: settlementAmount,
         description: `Settlement: ${payer.username} paid ${recipient.username}`,
         isSettlement: true,
+        hasBeenSettled: true,
         paidBy: new mongoose.Types.ObjectId(payerId),
         owedToPurchaser: true,
         splitEvenly: false,

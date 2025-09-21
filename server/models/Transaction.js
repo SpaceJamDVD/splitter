@@ -35,6 +35,10 @@ const transactionSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  hasBeenSettled: {
+    type: Boolean,
+    default: false,
+  },
   customSplit: [
     {
       userId: {

@@ -85,7 +85,6 @@ const TransactionList = ({
       setRecentSumTransactions(recentTotalData.transactionCount);
     } catch (err) {
       console.error('Failed to fetch data:', err);
-      setError('Failed to load data');
     } finally {
       setLoading(false);
     }

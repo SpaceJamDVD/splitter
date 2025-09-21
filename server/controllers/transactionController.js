@@ -242,11 +242,11 @@ class TransactionController {
   }
 
   async deleteTransaction(req, res) {
-    const { id } = req.params;
+    const { transactionId } = req.params;
     const userId = req.user.userId;
 
     try {
-      const transaction = await Transaction.findById(id).populate(
+      const transaction = await Transaction.findById(transactionId).populate(
         'paidBy',
         'username email'
       );
@@ -264,7 +264,7 @@ class TransactionController {
       const groupId = transaction.groupId;
 
       // Delete the transaction
-      await Transaction.findByIdAndDelete(id);
+      await Transaction.findByIdAndDelete(transactionId);
 
       // ========== SOCKET.IO IMPLEMENTATION ==========
 
@@ -272,7 +272,7 @@ class TransactionController {
       if (io) {
         io.to(`group-${groupId}`).emit('transaction-update', {
           type: 'deleted',
-          transactionId: id,
+          transactionId: transactionId,
           groupId: groupId,
           timestamp: new Date().toISOString(),
         });

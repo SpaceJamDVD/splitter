@@ -3,6 +3,7 @@ import {
   getGroupTransactions,
   settleUp,
   getRecentTotal,
+  deleteTransaction,
 } from '../services/transactionService';
 import { getBalancesForGroup } from '../services/memberBalanceService';
 import { AuthContext } from '../contexts/AuthContext';
@@ -222,6 +223,19 @@ const TransactionList = ({
 
     const member = allGroupMembers.find((m) => m._id === userId);
     return member?.username || 'Someone';
+  };
+
+  const handleDeleteTransaction = async (transactionId) => {
+    try {
+      await deleteTransaction(transactionId);
+      setTransactions((prev) => prev.filter((t) => t._id !== transactionId));
+      setOpenMenuId(null);
+      fetchRecentTotal(); // update totals
+      fetchBalances(); // update balances
+    } catch (err) {
+      console.error('Failed to delete transaction:', err);
+      setError('Could not delete transaction. Please try again.');
+    }
   };
 
   const handleSettleUp = async () => {
@@ -1068,7 +1082,7 @@ const TransactionList = ({
                                   'transparent';
                                 e.currentTarget.style.color = '#374151';
                               }}
-                              onClick={() => alert('Delete')}
+                              onClick={() => handleDeleteTransaction(tx._id)}
                             >
                               Delete Transaction
                             </button>
@@ -1341,7 +1355,9 @@ const TransactionList = ({
                               <div style={styles.dropdownMenu}>
                                 <button
                                   style={styles.dropdownItem}
-                                  onClick={() => alert('Delete')}
+                                  onClick={() =>
+                                    handleDeleteTransaction(tx._id)
+                                  }
                                 >
                                   Delete Transaction
                                 </button>

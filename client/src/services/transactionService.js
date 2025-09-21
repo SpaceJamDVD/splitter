@@ -34,3 +34,8 @@ export const getRecentTotal = async (groupId) => {
   const response = await API.get(`/transactions/recent-total/${groupId}`);
   return response.data;
 };
+
+export const deleteTransaction = async (transactionId) => {
+  const response = await API.delete(`/transactions/${transactionId}`);
+  return response.data;
+};
